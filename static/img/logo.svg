@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 5 115 40">
+  <defs>
+    <linearGradient id="traceGradient" x1="0%" y1="50%" x2="100%" y2="50%">
+      <stop offset="0%" style="stop-color:#00A4FF;" />
+      <stop offset="100%" style="stop-color:#A300FF;" />
+    </linearGradient>
+  </defs>
+  
+  <path 
+    d="M 20 50 L 20 15 C 20 10 25 10 30 10 L 50 10" 
+    stroke="url(#traceGradient)" 
+    stroke-width="4" 
+    fill="none" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+
+  <path 
+    d="M 50 10 L 70 10 L 80 35 L 90 10 L 110 10" 
+    stroke="url(#traceGradient)" 
+    stroke-width="4" 
+    fill="none" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+
+  <circle cx="115" cy="10" r="5" fill="url(#traceGradient)"/>
+</svg>

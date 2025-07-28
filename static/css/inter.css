@@ -1,0 +1,106 @@
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fMZg.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf) format('truetype');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf) format('truetype');
+}
+:root {
+  --slate-950: #020617;
+  --slate-900: #0f172a;
+  --slate-800: #1e293b;
+  --slate-700: #334155;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --blue-600: #2563eb;
+  --blue-700: #1d4ed8;
+  --white: #ffffff;
+  --green-500: #22c55e;
+  --green-300: #86efac;
+  --red-500: #ef4444;
+  --red-300: #fca5a5;
+  --yellow-500: #eab308;
+  --yellow-400: #facc15;
+}
+body.comfortable { --spacing: 1.5rem; }
+body.compact     { --spacing: 1rem;  }
+.container { padding: var(--spacing); }
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.5;
+    transform: scale(1.4);
+  }
+}
+.dot-pulse-green {
+  animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.bg-slate-950 { background-color: var(--slate-950) !important; }
+.bg-slate-900 { background-color: var(--slate-900) !important; }
+.bg-slate-800 { background-color: var(--slate-800) !important; }
+.text-gray-300 { color: var(--gray-300) !important; }
+.text-gray-400 { color: var(--gray-400) !important; }
+.text-white    { color: var(--white) !important; }
+.bg-blue-600 { background-color: var(--blue-600) !important; }
+.hover\:bg-blue-700:hover { background-color: var(--blue-700) !important; }
+.border-yellow-500 { border-color: var(--yellow-500) !important; }
+.text-yellow-400   { color: var(--yellow-400) !important; }
+.status-online  { background-color: rgba(34,197,94,0.2) !important; color: var(--green-300) !important; }
+.status-offline { background-color: rgba(239,68,68,0.2) !important; color: var(--red-300) !important; }
+.border-slate-950 { border-color: var(--slate-950) !important; }
+.border-slate-900 { border-color: var(--slate-900) !important; }
+.border-slate-800 { border-color: var(--slate-800) !important; }
+.border-slate-700 { border-color: var(--slate-700) !important; }
+.bg-slate-950\/80 { background-color: rgba(2, 6, 23, 0.8) !important; }
+.bg-slate-900\/50 { background-color: rgba(15, 23, 42, 0.5) !important; }
+.bg-slate-800\/50 { background-color: rgba(30, 41, 59, 0.5) !important; }
+.border-yellow-500\/50 { border-color: rgba(234, 179, 8, 0.5) !important; }
+.border-blue-500\/50   { border-color: rgba(59, 130, 246, 0.5) !important; }
+.border-red-500\/50    { border-color: rgba(239, 68, 68, 0.5) !important; }
+.backdrop-blur-xl      { backdrop-filter: blur(20px) !important; }
+:root {
+  --slate-600: #475569;
+}
+
+.bg-slate-700 { background-color: var(--slate-700) !important; }
+.hover\:bg-slate-600:hover { background-color: var(--slate-600) !important; }
+
+:root {
+  --slate-500: #64748b;
+  --slate-300: #cbd5e1;
+  --gray-200:  #e5e7eb;
+  --blue-400:  #60a5fa;
+}
+
+.text-slate-500       { color: var(--slate-500) !important; }
+.text-slate-300       { color: var(--slate-300) !important; }
+.hover\:text-slate-300:hover { color: var(--slate-300) !important; }
+.text-gray-200        { color: var(--gray-200) !important; }
+.text-blue-400        { color: var(--blue-400) !important; }
+.backdrop-blur-sm     { backdrop-filter: blur(4px) !important; }
+.hover\:bg-yellow-500\/10:hover { background-color: rgba(234, 179, 8, 0.1) !important; }
+.hover\:bg-blue-500\/10:hover   { background-color: rgba(59, 130, 246, 0.1) !important; }
+.hover\:bg-red-500\/10:hover    { background-color: rgba(239, 68, 68, 0.1) !important; }
+
+
