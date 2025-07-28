@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - LumenTrace</title>
+    <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
+    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
+    <style> body { font-family: 'Inter', sans-serif; } </style>
+</head>
+<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}">
+    <div x-data="{ sidebarOpen: false }" class="flex h-screen">
+        <aside class="fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800"
+            :class="{'translate-x-0': sidebarOpen, '-translate-x-full': !sidebarOpen}">
+            <div class="absolute top-0 right-0 p-4 lg:hidden"><button @click="sidebarOpen = false" class="text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>
+            <div class="flex flex-col items-center justify-center p-6 space-y-2">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto">
+                <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
+            </div>
+            <nav class="mt-10 px-6 space-y-2">
+                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                    Dashboard
+                </a>
+                <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Settings
+                </a>
+            </nav>
+        </aside>
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950/80 backdrop-blur-sm border-b border-slate-800"><button @click="sidebarOpen = true" class="text-gray-400 focus:outline-none"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg></button><h1 class="text-xl font-bold text-white">Settings</h1></header>
+            <main class="flex-1 overflow-y-auto p-4 sm:p-8">
+                <div class="max-w-4xl mx-auto">
+                    <header class="mb-8">
+                        <h1 class="text-3xl font-bold text-gray-200">Application Settings</h1>
+                        <p class="text-gray-400 mt-1">Configure general, network, and appearance options.</p>
+                    </header>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            <div role="alert" class="mb-6 space-y-3" x-data="{ show: true }" x-init="setTimeout(() => show = false, 5000)" x-show="show" x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                                {% for category, message in messages %}
+                                    <div class="p-4 rounded-md text-sm flex items-center justify-between {{ 'bg-red-500/20 text-red-300 border border-red-500/30' if category == 'error' else 'bg-green-500/20 text-green-300 border border-green-500/30' }}">
+                                        <div><span class="font-medium">{{ 'Error:' if category == 'error' else 'Success:' }}</span> {{ message }}</div>
+                                        <button @click="show = false" class="ml-4 text-gray-400 hover:text-white focus:outline-none" aria-label="Close message">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+
+                    <div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 mb-8">
+                        <h2 class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">UPS Systems</h2>
+                        <div class="overflow-x-auto mb-6">
+                            <table class="w-full text-left">
+                                <thead class="border-b border-slate-700"><tr><th class="p-3 font-semibold text-sm text-gray-400">UPS Name</th><th class="p-3 font-semibold text-sm text-gray-400">IP Address</th><th class="p-3 font-semibold text-sm text-gray-400">Port</th><th class="p-3 font-semibold text-sm text-center text-gray-400">Actions</th></tr></thead>
+                                <tbody>
+                                    {% for ups in settings.ups_configs %}
+                                    <tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-900/25">
+                                        <td class="p-3 text-white font-semibold">{{ ups.name }}</td>
+                                        <td class="p-3 font-mono text-sm text-gray-400">{{ ups.ip }}</td>
+                                        <td class="p-3 font-mono text-sm text-gray-400">{{ ups.port }}</td>
+                                        <td class="p-3 text-center space-x-2">
+                                            <a href="{{ url_for('edit_ups', index=loop.index0) }}" class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10">Edit</a>
+                                            <a href="{{ url_for('settings', remove_ups=loop.index0) }}" class="px-3 py-1 rounded-md text-sm border border-red-500/50 text-red-400 hover:bg-red-500/10">Remove</a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <h3 class="text-xl font-semibold text-gray-200 mb-5 border-t border-slate-700 pt-6">Add New UPS</h3>
+                        <form method="POST" action="{{ url_for('settings') }}" class="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                            <input type="hidden" name="action" value="add_ups">
+                            <div><label for="ups_name" class="block text-sm font-medium text-gray-300 mb-1">UPS Name</label><input type="text" id="ups_name" name="ups_name" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700"></div>
+                            <div>
+                                <label for="ups_ip" class="block text-sm font-medium text-gray-300 mb-1">IP Address</label>
+                                <input type="text" id="ups_ip" name="ups_ip" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 font-mono"
+                                    pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+                                    title="Please enter a valid IPv4 address (e.g., 192.168.1.10)"
+                                    inputmode="decimal">
+                            </div>
+                            <div>
+                                <label for="ups_port" class="block text-sm font-medium text-gray-300 mb-1">Port</label>
+                                <input type="number" id="ups_port" name="ups_port" value="3493" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700" min="1" max="65535"
+                                    title="Please enter a valid port number (1-65535)"
+                                    inputmode="numeric">
+                            </div>
+                            <div class="md:col-span-3 mt-4">
+                                <button type="submit" class="w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700">
+                                    <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                    Add UPS
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <form method="POST" action="{{ url_for('settings') }}">
+                        <input type="hidden" name="action" value="update_general">
+                        <div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 space-y-8">
+                            <fieldset>
+                                <legend class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">General</legend>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label for="refresh_interval" class="block text-sm font-medium text-gray-300 mb-1">Dashboard Refresh (seconds)</label>
+                                        <input type="number" id="refresh_interval" name="refresh_interval" value="{{ settings.refresh_interval }}" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700"
+                                            inputmode="numeric">
+                                    </div>
+                                    <div>
+                                        <label for="log_retention" class="block text-sm font-medium text-gray-300 mb-1">Log Retention (lines)</label>
+                                        <input type="number" id="log_retention" name="log_retention" value="{{ settings.log_retention }}" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700"
+                                            inputmode="numeric">
+                                    </div>
+                                    <div>
+                                        <label for="verbose_logging" class="block text-sm font-medium text-gray-300 mb-1">Verbose Logging</label>
+                                        <select id="verbose_logging" name="verbose_logging" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700">
+                                            <option value="false" {% if not settings.verbose_logging %}selected{% endif %}>Disabled</option>
+                                            <option value="true" {% if settings.verbose_logging %}selected{% endif %}>Enabled</option>
+                                        </select>
+                                        <p class="mt-1 text-sm text-gray-500">Log routine events like periodic status checks.</p>
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label for="wol_battery_threshold" class="block text-sm font-medium text-gray-300 mb-1">WOL Battery Threshold (%)</label>
+                                        <input type="number" id="wol_battery_threshold" name="wol_battery_threshold" value="{{ settings.wol_battery_threshold }}" required min="0" max="100" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700"
+                                            inputmode="numeric">
+                                        <p class="mt-1 text-sm text-gray-500">Percentage the UPS battery must reach after power restoration before Wake-on-LAN is triggered.</p>
+                                    </div>
+                                </div>
+                            </fieldset>
+                            <fieldset>
+                                <legend class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">Network Discovery</legend>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label for="discovery_timeout" class="block text-sm font-medium text-gray-300 mb-1">Discovery Timeout (seconds)</label>
+                                        <input type="number" id="discovery_timeout" name="discovery_timeout" value="{{ settings.discovery_timeout }}" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700"
+                                            inputmode="numeric">
+                                    </div>
+                                    <div>
+                                        <label for="ip_scan_range" class="block text-sm font-medium text-gray-300 mb-1">IP Scan Range (CIDR)</label>
+                                        <input type="text" id="ip_scan_range" name="ip_scan_range" value="{{ settings.ip_scan_range }}" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 font-mono" placeholder="e.g., 192.168.1.0/24"
+                                            pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/(?:[0-9]|[1-2][0-9]|3[0-2]))?$"
+                                            title="Please enter a valid IPv4 address or CIDR range (e.g., 192.168.1.1 or 192.168.1.0/24)"
+                                            inputmode="decimal">
+                                        <p class="mt-1 text-sm text-gray-500">Defines the network range for device discovery.</p>
+                                    </div>
+                                </div>
+                            </fieldset>
+                            <fieldset>
+                                <legend class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">Appearance</legend>
+                                <div><label for="density" class="block text-sm font-medium text-gray-300 mb-1">UI Density</label><select id="density" name="density" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700"><option value="comfortable" {% if settings.density == 'comfortable' %}selected{% endif %}>Comfortable</option><option value="compact" {% if settings.density == 'compact' %}selected{% endif %}>Compact</option></select><p class="mt-1 text-sm text-gray-500">Adjusts the spacing and size of elements in the user interface.</p></div>
+                            </fieldset>
+                            <div class="pt-6 border-t border-slate-700">
+                                <button type="submit" class="w-full px-6 py-3 rounded-lg font-semibold flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2 -ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    Save All Settings
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </main>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discover Devices - LumenTrace</title>
+    <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
+    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        input[type="checkbox"]{-webkit-appearance:none;-moz-appearance:none;appearance:none;display:inline-block;height:1.25rem;width:1.25rem;border-radius:.25rem;border:1px solid #64748b;background-color:#334155;cursor:pointer;vertical-align:middle;transition:background-color .15s ease-in-out,border-color .15s ease-in-out}
+        input[type="checkbox"]:checked{background-color:#3b82f6;border-color:#3b82f6;background-image:url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");background-size:100% 100%;background-position:center;background-repeat:no-repeat}
+        input[type="checkbox"]:focus{outline:none;box-shadow:0 0 0 2px rgba(59,130,246,.5)}
+    </style>
+</head>
+<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}">
+    <div x-data="{ sidebarOpen: false }" class="flex h-screen">
+        <aside class="fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800"
+            :class="{'translate-x-0': sidebarOpen, '-translate-x-full': !sidebarOpen}">
+            <div class="absolute top-0 right-0 p-4 lg:hidden"><button @click="sidebarOpen = false" class="text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>
+            <div class="flex flex-col items-center justify-center p-6 space-y-2">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto">
+                <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
+            </div>
+            <nav class="mt-10 px-6 space-y-2">
+                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                    Dashboard
+                </a>
+                <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Settings
+                </a>
+            </nav>
+        </aside>
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950/80 backdrop-blur-sm border-b border-slate-800"><button @click="sidebarOpen = !sidebarOpen" class="text-gray-400 focus:outline-none"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg></button><h1 class="text-xl font-bold text-white">Discover Devices</h1></header>
+            <main class="flex-1 overflow-y-auto p-4 sm:p-8">
+                <div class="max-w-4xl mx-auto">
+                    <header class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-200">Discovered Devices</h1>
+                            <p class="text-gray-400 mt-1">Found new devices on your network. Add them to begin monitoring.</p>
+                        </div>
+                        <button id="add-selected-btn" onclick="addSelectedDevices(this)" disabled class="px-4 py-2 rounded-lg font-semibold flex-shrink-0 flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed">
+                            <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Add Selected (<span id="selected-count">0</span>)
+                        </button>
+                    </header>
+                    <div class="rounded-xl shadow-lg bg-slate-900/50 border border-slate-800">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="border-b border-slate-700">
+                                    <tr>
+                                        <th class="p-4"><input type="checkbox" id="select-all-devices" onchange="toggleSelectAll(this)"></th>
+                                        <th class="p-4 font-semibold text-sm text-gray-400">IP Address</th>
+                                        <th class="p-4 font-semibold text-sm text-gray-400">MAC Address</th>
+                                        <th class="p-4 font-semibold text-sm text-center text-gray-400">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for dev in devices %}
+                                    <tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-900/25">
+                                        <td class="p-4"><input type="checkbox" class="device-checkbox" data-ip="{{ dev.ip }}" data-mac="{{ dev.mac }}" onchange="updateSelectedCount()"></td>
+                                        <td class="p-4 font-mono text-sm text-gray-400">{{ dev.ip }}</td>
+                                        <td class="p-4 font-mono text-sm text-gray-400">{{ dev.mac }}</td>
+                                        <td class="p-4 text-center">
+                                            <a href="{{ url_for('add_device', ip=dev.ip, mac=dev.mac) }}" class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10">Add</a>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr><td colspan="4" class="text-center p-8 text-gray-500">No new devices found on the network.</td></tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+    <script>
+        function showToast(message, type = 'success') { const t = document.createElement('div'); t.className = `p-3 rounded-lg shadow-lg text-white transform-gpu translate-y-full opacity-0 transition-all duration-300 ease-out ${type==='success'?'bg-green-600':'bg-red-600'}`; t.textContent = message; document.getElementById('toast-container').appendChild(t); setTimeout(() => {t.classList.remove('translate-y-full','opacity-0');t.classList.add('translate-y-0','opacity-100');},50); setTimeout(() => {t.classList.add('translate-y-full','opacity-0');t.addEventListener('transitionend', () => t.remove());},3000); }
+        function updateSelectedCount() { const checkboxes = document.querySelectorAll('.device-checkbox:checked'); document.getElementById('selected-count').textContent = checkboxes.length; document.getElementById('add-selected-btn').disabled = checkboxes.length === 0; const allCheckboxes = document.querySelectorAll('.device-checkbox'); document.getElementById('select-all-devices').checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length; }
+        function toggleSelectAll(source) { document.querySelectorAll('.device-checkbox').forEach(checkbox => checkbox.checked = source.checked); updateSelectedCount(); }
+        function addSelectedDevices(btn) { const devices = Array.from(document.querySelectorAll('.device-checkbox:checked')).map(cb => ({ip: cb.dataset.ip, mac: cb.dataset.mac})); if (devices.length === 0) return; btn.disabled = true; const btnContent = btn.innerHTML; btn.innerHTML = 'Adding...'; fetch('/add_selected_devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(devices) }).then(r=>r.json()).then(d => { showToast(d.message, d.success ? 'success' : 'error'); if(d.success) setTimeout(()=>window.location.href = "{{ url_for('dashboard') }}",1000); }).catch(e => showToast('Network error.', 'error')).finally(() => {btn.disabled=false;btn.innerHTML = btnContent;}); }
+        document.addEventListener('DOMContentLoaded', updateSelectedCount);
+    </script>
+</body>
+</html>

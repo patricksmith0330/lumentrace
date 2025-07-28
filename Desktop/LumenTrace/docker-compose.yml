@@ -1,0 +1,34 @@
+services:
+  lumentrace:
+    image: pwsmith1988/lumentrace:latest
+    container_name: lumentrace
+    network_mode: host
+    restart: unless-stopped
+    cap_add:
+      - NET_RAW
+      - NET_BROADCAST
+      - NET_ADMIN
+    volumes:
+      - lumentrace_data_volume:/data
+    env_file: .env
+
+  redis:
+    image: redis:7-alpine
+    container_name: lumentrace_redis
+    networks:
+      - lumentrace_network
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  lumentrace_data_volume:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  lumentrace_network:
+    driver: bridge
