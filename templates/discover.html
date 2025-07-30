@@ -1,92 +1,467 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Discover Devices - LumenTrace</title>
     <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
-    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    <link href="{{ url_for('static', filename='css/custom-vars.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
+    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    
     <style>
         body { font-family: 'Inter', sans-serif; }
-        input[type="checkbox"]{-webkit-appearance:none;-moz-appearance:none;appearance:none;display:inline-block;height:1.25rem;width:1.25rem;border-radius:.25rem;border:1px solid #64748b;background-color:#334155;cursor:pointer;vertical-align:middle;transition:background-color .15s ease-in-out,border-color .15s ease-in-out}
-        input[type="checkbox"]:checked{background-color:#3b82f6;border-color:#3b82f6;background-image:url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");background-size:100% 100%;background-position:center;background-repeat:no-repeat}
-        input[type="checkbox"]:focus{outline:none;box-shadow:0 0 0 2px rgba(59,130,246,.5)}
+        input[type="checkbox"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            display: inline-block;
+            height: 1.25rem;
+            width: 1.25rem;
+            border-radius: .25rem;
+            border: 1px solid #64748b;
+            background-color: #334155;
+            cursor: pointer;
+            vertical-align: middle;
+            transition: all .15s ease-in-out;
+        }
+        input[type="checkbox"]:checked {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        input[type="checkbox"]:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, .5);
+        }
+        input[type="checkbox"]:hover {
+            border-color: #3b82f6;
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}">
-    <div x-data="{ sidebarOpen: false }" class="flex h-screen">
-        <aside class="fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800"
-            :class="{'translate-x-0': sidebarOpen, '-translate-x-full': !sidebarOpen}">
-            <div class="absolute top-0 right-0 p-4 lg:hidden"><button @click="sidebarOpen = false" class="text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>
+<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}" 
+      x-data="discoverApp()" 
+      x-init="init()">
+    
+    <!-- Toast Container -->
+    <div id="toast-container" 
+         class="fixed top-4 right-4 z-50 space-y-2" 
+         x-show="toasts.length > 0"
+         x-transition>
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white"
+                 :class="toast.type === 'success' ? 'bg-green-600' : 
+                         toast.type === 'error' ? 'bg-red-600' : 
+                         toast.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'"
+                 x-show="toast.visible"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform translate-x-full"
+                 x-transition:enter-end="opacity-100 transform translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 transform translate-x-0"
+                 x-transition:leave-end="opacity-0 transform translate-x-full">
+                
+                <div class="flex-1">
+                    <p class="text-sm font-medium" x-text="toast.message"></p>
+                </div>
+                
+                <button @click="removeToast(toast.id)" class="flex-shrink-0 text-white/70 hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div x-show="loading" 
+         x-transition:enter="transition-opacity ease-linear duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-linear duration-300"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-slate-900 rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span class="text-white font-medium">Scanning network...</span>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <!-- Desktop Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col">
             <div class="flex flex-col items-center justify-center p-6 space-y-2">
-                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto" />
                 <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
             </div>
+            
             <nav class="mt-10 px-6 space-y-2">
-                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
                     Dashboard
                 </a>
                 <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
                     Settings
                 </a>
             </nav>
         </aside>
+
+        <!-- Main Content -->
         <div class="flex-1 flex flex-col overflow-hidden">
-            <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950/80 backdrop-blur-sm border-b border-slate-800"><button @click="sidebarOpen = !sidebarOpen" class="text-gray-400 focus:outline-none"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg></button><h1 class="text-xl font-bold text-white">Discover Devices</h1></header>
-            <main class="flex-1 overflow-y-auto p-4 sm:p-8">
-                <div class="max-w-4xl mx-auto">
-                    <header class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                            <h1 class="text-3xl font-bold text-gray-200">Discovered Devices</h1>
-                            <p class="text-gray-400 mt-1">Found new devices on your network. Add them to begin monitoring.</p>
+            <!-- Mobile Header -->
+            <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950 border-b border-slate-800">
+                <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                <h1 class="text-xl font-bold text-white">Discover Devices</h1>
+                <div class="w-10"></div>
+            </header>
+            
+            <!-- Mobile Sidebar -->
+            <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform -translate-x-full transition-transform duration-300 ease-in-out lg:hidden">
+                <div class="absolute top-0 right-0 p-4">
+                    <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="flex flex-col items-center justify-center p-6 space-y-2 mt-8">
+                    <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto" />
+                    <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
+                </div>
+                
+                <nav class="mt-10 px-6 space-y-2">
+                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                        <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                        <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Settings
+                    </a>
+                </nav>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 overflow-y-auto">
+                <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <!-- Header -->
+                    <header class="mb-8">
+                        <div class="flex items-center gap-3 mb-2">
+                            <a href="{{ url_for('dashboard') }}" class="text-gray-400 hover:text-white transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                            </a>
+                            <h1 class="text-3xl font-bold text-gray-200">Network Discovery</h1>
                         </div>
-                        <button id="add-selected-btn" onclick="addSelectedDevices(this)" disabled class="px-4 py-2 rounded-lg font-semibold flex-shrink-0 flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed">
-                            <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                            Add Selected (<span id="selected-count">0</span>)
-                        </button>
+                        <p class="text-gray-400">Scan your network to find new devices. Range: {{ settings.ip_scan_range }}</p>
                     </header>
-                    <div class="rounded-xl shadow-lg bg-slate-900/50 border border-slate-800">
+
+                    <!-- Action Buttons -->
+                    <div class="mb-6 flex flex-col sm:flex-row gap-4">
+                        <button @click="scanNetwork" 
+                                :disabled="loading"
+                                class="flex-1 sm:flex-none flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-slate-700 text-white hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            <span x-text="loading ? 'Scanning...' : 'Rescan Network'"></span>
+                        </button>
+                        
+                        <button @click="addSelectedDevices" 
+                                :disabled="selectedDevices.length === 0 || loading"
+                                class="flex-1 sm:flex-none flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            <span>Add Selected (<span x-text="selectedDevices.length"></span>)</span>
+                        </button>
+                    </div>
+
+                    <!-- Discovered Devices Table -->
+                    <div class="rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors overflow-hidden">
+                        <div class="p-6 border-b border-slate-700">
+                            <h2 class="text-xl font-semibold text-gray-200">Discovered Devices</h2>
+                            <p class="text-sm text-gray-400 mt-1">
+                                <span x-show="devices.length > 0">Found <span x-text="devices.length"></span> new device(s) on your network</span>
+                                <span x-show="devices.length === 0">No new devices found. Try rescanning or check your network settings.</span>
+                            </p>
+                        </div>
+                        
                         <div class="overflow-x-auto">
                             <table class="w-full text-left">
-                                <thead class="border-b border-slate-700">
+                                <thead class="border-b border-slate-700 bg-slate-800/50">
                                     <tr>
-                                        <th class="p-4"><input type="checkbox" id="select-all-devices" onchange="toggleSelectAll(this)"></th>
-                                        <th class="p-4 font-semibold text-sm text-gray-400">IP Address</th>
-                                        <th class="p-4 font-semibold text-sm text-gray-400">MAC Address</th>
-                                        <th class="p-4 font-semibold text-sm text-center text-gray-400">Action</th>
+                                        <th class="p-4 w-12">
+                                            <input type="checkbox" 
+                                                   @change="toggleSelectAll($event.target.checked)"
+                                                   :checked="devices.length > 0 && selectedDevices.length === devices.length"
+                                                   :disabled="devices.length === 0">
+                                        </th>
+                                        <th class="p-4 font-semibold text-sm text-gray-300">IP Address</th>
+                                        <th class="p-4 font-semibold text-sm text-gray-300">MAC Address</th>
+                                        <th class="p-4 font-semibold text-sm text-gray-300">Device Name</th>
+                                        <th class="p-4 font-semibold text-sm text-center text-gray-300">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for dev in devices %}
-                                    <tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-900/25">
-                                        <td class="p-4"><input type="checkbox" class="device-checkbox" data-ip="{{ dev.ip }}" data-mac="{{ dev.mac }}" onchange="updateSelectedCount()"></td>
-                                        <td class="p-4 font-mono text-sm text-gray-400">{{ dev.ip }}</td>
-                                        <td class="p-4 font-mono text-sm text-gray-400">{{ dev.mac }}</td>
-                                        <td class="p-4 text-center">
-                                            <a href="{{ url_for('add_device', ip=dev.ip, mac=dev.mac) }}" class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10">Add</a>
+                                    <template x-for="(device, index) in devices" :key="device.ip">
+                                        <tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-800/30 transition-colors">
+                                            <td class="p-4">
+                                                <input type="checkbox" 
+                                                       :value="device.ip"
+                                                       @change="toggleDevice(device.ip, device.mac)"
+                                                       :checked="isSelected(device.ip)">
+                                            </td>
+                                            <td class="p-4 font-mono text-sm text-gray-300" x-text="device.ip"></td>
+                                            <td class="p-4 font-mono text-sm text-gray-300" x-text="device.mac"></td>
+                                            <td class="p-4">
+                                                <input type="text" 
+                                                       x-model="device.name"
+                                                       class="w-full px-2 py-1 rounded border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+                                                       :placeholder="`Device-${device.ip.replace(/\./g, '-')}`">
+                                            </td>
+                                            <td class="p-4 text-center">
+                                                <button @click="addIndividualDevice(device)" 
+                                                        :disabled="loading"
+                                                        class="inline-flex items-center px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                                    Add Device
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="devices.length === 0">
+                                        <td colspan="5" class="text-center p-12 text-gray-500">
+                                            <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                            </svg>
+                                            <p class="text-lg font-medium mb-1">No new devices discovered</p>
+                                            <p class="text-sm">Click "Rescan Network" to search for devices</p>
                                         </td>
                                     </tr>
-                                    {% else %}
-                                    <tr><td colspan="4" class="text-center p-8 text-gray-500">No new devices found on the network.</td></tr>
-                                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    <!-- Info Box -->
+                    <div class="mt-8 p-6 rounded-lg bg-slate-900/30 border border-slate-800">
+                        <h3 class="text-lg font-semibold text-gray-200 mb-3">Discovery Information</h3>
+                        <ul class="space-y-2 text-sm text-gray-400">
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Network discovery uses ARP scanning to find active devices on your network.</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                <span>Only devices that respond to ARP requests and are not already added will appear.</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                <span>You can customize device names before adding them for easier identification.</span>
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </main>
         </div>
     </div>
-    <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Mobile JavaScript -->
     <script>
-        function showToast(message, type = 'success') { const t = document.createElement('div'); t.className = `p-3 rounded-lg shadow-lg text-white transform-gpu translate-y-full opacity-0 transition-all duration-300 ease-out ${type==='success'?'bg-green-600':'bg-red-600'}`; t.textContent = message; document.getElementById('toast-container').appendChild(t); setTimeout(() => {t.classList.remove('translate-y-full','opacity-0');t.classList.add('translate-y-0','opacity-100');},50); setTimeout(() => {t.classList.add('translate-y-full','opacity-0');t.addEventListener('transitionend', () => t.remove());},3000); }
-        function updateSelectedCount() { const checkboxes = document.querySelectorAll('.device-checkbox:checked'); document.getElementById('selected-count').textContent = checkboxes.length; document.getElementById('add-selected-btn').disabled = checkboxes.length === 0; const allCheckboxes = document.querySelectorAll('.device-checkbox'); document.getElementById('select-all-devices').checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length; }
-        function toggleSelectAll(source) { document.querySelectorAll('.device-checkbox').forEach(checkbox => checkbox.checked = source.checked); updateSelectedCount(); }
-        function addSelectedDevices(btn) { const devices = Array.from(document.querySelectorAll('.device-checkbox:checked')).map(cb => ({ip: cb.dataset.ip, mac: cb.dataset.mac})); if (devices.length === 0) return; btn.disabled = true; const btnContent = btn.innerHTML; btn.innerHTML = 'Adding...'; fetch('/add_selected_devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(devices) }).then(r=>r.json()).then(d => { showToast(d.message, d.success ? 'success' : 'error'); if(d.success) setTimeout(()=>window.location.href = "{{ url_for('dashboard') }}",1000); }).catch(e => showToast('Network error.', 'error')).finally(() => {btn.disabled=false;btn.innerHTML = btnContent;}); }
-        document.addEventListener('DOMContentLoaded', updateSelectedCount);
+    function toggleMobileSidebar() {
+        const sidebar = document.getElementById('mobile-sidebar');
+        sidebar.classList.toggle('-translate-x-full');
+    }
+    </script>
+
+    <script>
+        // Initialize discovered devices from server
+        const initialDevices = {{ devices | tojson }};
+        
+        function discoverApp() {
+            return {
+                // State
+                loading: false,
+                toasts: [],
+                devices: initialDevices.map(d => ({ ...d, name: d.name || `Device-${d.ip.replace(/\./g, '-')}` })),
+                selectedDevices: [],
+                
+                // Initialization
+                init() {
+                    // Any initialization logic
+                },
+                
+                // Check if device is selected
+                isSelected(ip) {
+                    return this.selectedDevices.some(d => d.ip === ip);
+                },
+                
+                // Toggle device selection
+                toggleDevice(ip, mac) {
+                    const index = this.selectedDevices.findIndex(d => d.ip === ip);
+                    if (index > -1) {
+                        this.selectedDevices.splice(index, 1);
+                    } else {
+                        const device = this.devices.find(d => d.ip === ip);
+                        this.selectedDevices.push({ 
+                            ip, 
+                            mac, 
+                            name: device.name || `Device-${ip.replace(/\./g, '-')}` 
+                        });
+                    }
+                },
+                
+                // Toggle all devices
+                toggleSelectAll(checked) {
+                    if (checked) {
+                        this.selectedDevices = this.devices.map(d => ({ 
+                            ip: d.ip, 
+                            mac: d.mac, 
+                            name: d.name || `Device-${d.ip.replace(/\./g, '-')}` 
+                        }));
+                    } else {
+                        this.selectedDevices = [];
+                    }
+                },
+                
+                // Scan network
+                async scanNetwork() {
+                    this.loading = true;
+                    this.showToast('Scanning network...', 'info');
+                    
+                    // Reload the page to trigger a new scan
+                    window.location.reload();
+                },
+                
+                // Add selected devices
+                async addSelectedDevices() {
+                    if (this.selectedDevices.length === 0) return;
+                    
+                    this.loading = true;
+                    
+                    // Update device names from inputs
+                    const devicesToAdd = this.selectedDevices.map(selected => {
+                        const device = this.devices.find(d => d.ip === selected.ip);
+                        return {
+                            ip: selected.ip,
+                            mac: selected.mac,
+                            name: device.name || `Device-${selected.ip.replace(/\./g, '-')}`
+                        };
+                    });
+                    
+                    try {
+                        const response = await fetch('/add_selected_devices', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(devicesToAdd)
+                        });
+                        
+                        const data = await response.json();
+                        this.showToast(data.message, data.success ? 'success' : 'error');
+                        
+                        if (data.success) {
+                            setTimeout(() => {
+                                window.location.href = '{{ url_for("dashboard") }}';
+                            }, 1500);
+                        }
+                    } catch (error) {
+                        this.showToast('Network error occurred', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                // Add individual device
+                async addIndividualDevice(device) {
+                    this.loading = true;
+                    
+                    const deviceToAdd = {
+                        ip: device.ip,
+                        mac: device.mac,
+                        name: device.name || `Device-${device.ip.replace(/\./g, '-')}`
+                    };
+                    
+                    try {
+                        const response = await fetch('/add_selected_devices', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify([deviceToAdd])
+                        });
+                        
+                        const data = await response.json();
+                        this.showToast(data.message, data.success ? 'success' : 'error');
+                        
+                        if (data.success) {
+                            // Remove the device from the list
+                            const index = this.devices.findIndex(d => d.ip === device.ip);
+                            if (index > -1) {
+                                this.devices.splice(index, 1);
+                            }
+                            
+                            // Also remove from selected if it was selected
+                            const selectedIndex = this.selectedDevices.findIndex(d => d.ip === device.ip);
+                            if (selectedIndex > -1) {
+                                this.selectedDevices.splice(selectedIndex, 1);
+                            }
+                        }
+                    } catch (error) {
+                        this.showToast('Network error occurred', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                // Toast system
+                showToast(message, type = 'info') {
+                    const id = Date.now();
+                    const toast = { id, message, type, visible: true };
+                    this.toasts.push(toast);
+                    
+                    // Auto remove after 5 seconds
+                    setTimeout(() => {
+                        this.removeToast(id);
+                    }, 5000);
+                },
+                
+                removeToast(id) {
+                    const index = this.toasts.findIndex(t => t.id === id);
+                    if (index > -1) {
+                        this.toasts[index].visible = false;
+                        setTimeout(() => {
+                            this.toasts.splice(index, 1);
+                        }, 200);
+                    }
+                }
+            };
+        }
     </script>
 </body>
 </html>

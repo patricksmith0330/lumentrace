@@ -14,6 +14,22 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
+# LumenTrace: Automated Wake-on-LAN for UPS Power Restoration
+# Copyright (C) 2025 Patrick Smith patricksmith0330@gmail.com
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 import os
 import json
 import subprocess
@@ -21,25 +37,29 @@ import socket
 import logging
 import threading
 import time
+import uuid
 from datetime import datetime
 from collections import defaultdict
 import ipaddress
 import sys
+import re
 
 from dotenv import load_dotenv
-load_dotenv()
-
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
-import re
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
 from pathlib import Path
-
 from pythonjsonlogger import jsonlogger
 from waitress import serve
+from ping3 import ping
+from filelock import FileLock
+from scapy.all import srp, Ether, ARP, getmacbyip
+
+load_dotenv()
 
 def is_valid_mac(mac):
-    return re.match(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$', mac) is not None
+    return re.match(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$', mac)
 
 def is_valid_ip(ip):
     try:
@@ -47,6 +67,36 @@ def is_valid_ip(ip):
         return True
     except ValueError:
         return False
+
+def generate_ups_id(name, ip):
+    """Generate a unique ID for UPS systems"""
+    return f"{name}_{ip}_{str(uuid.uuid4())[:8]}"
+
+def find_ups_by_id(ups_id):
+    """Find UPS configuration by ID"""
+    for i, ups in enumerate(state.get('settings', {}).get('ups_configs', [])):
+        if ups.get('id') == ups_id:
+            return i, ups
+    return None, None
+
+def linregress(x, y):
+    n = len(x)
+    if n < 2:
+        raise ValueError("Need at least 2 points")
+    
+    sum_x = sum(x)
+    sum_y = sum(y)
+    sum_xy = sum(x[i] * y[i] for i in range(n))
+    sum_x2 = sum(x[i] ** 2 for i in range(n))
+    
+    denominator = n * sum_x2 - sum_x ** 2
+    if denominator == 0:
+        raise ValueError("Perfect horizontal line")
+    
+    slope = (n * sum_xy - sum_x * sum_y) / denominator
+    intercept = (sum_y - slope * sum_x) / n
+    
+    return slope, intercept, None, None, None
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -62,6 +112,9 @@ if not logger.handlers:
     logger.addHandler(logHandler)
 
 app = Flask(__name__)
+
+# CSRF Protection
+csrf = CSRFProtect(app)
 
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 limiter = Limiter(
@@ -80,13 +133,6 @@ for handler in list(app.logger.handlers):
 app.logger.addHandler(logHandler)
 app.logger.setLevel(logging.INFO)
 
-
-from scipy.stats import linregress
-from ping3 import ping
-from filelock import FileLock
-from scapy.all import srp, Ether, ARP, getmacbyip
-
-
 POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', 10))
 DATA_DIR = os.environ.get('DATA_DIR', '/data')
 DATA_FILE = os.path.join(DATA_DIR, 'state.json')
@@ -98,7 +144,7 @@ DEFAULT_SETTINGS = {
     'ip_scan_range': '192.168.1.0/24',
     'discovery_timeout': 2,
     'ups_configs': [
-        {'name': 'ups', 'ip': 'localhost', 'port': 3493}
+        {'id': 'ups_localhost_default', 'name': 'ups', 'ip': 'localhost', 'port': 3493}
     ],
     'density': 'comfortable',
     'wol_battery_threshold': 80,
@@ -129,6 +175,12 @@ def load_state():
                     loaded_state = json.load(f)
                     state = {**DEFAULT_STATE, **loaded_state}
                     state['settings'] = {**DEFAULT_SETTINGS, **state.get('settings', {})}
+                    
+                    # Ensure all UPS configs have IDs
+                    for ups in state['settings']['ups_configs']:
+                        if 'id' not in ups:
+                            ups['id'] = generate_ups_id(ups['name'], ups['ip'])
+                    
                     for device in state.get('devices', []):
                         device.setdefault('last_seen', None)
                 logger.info(f"Loaded state from {DATA_FILE}")
@@ -166,6 +218,7 @@ def get_ups_data():
     all_ups_data = []
     for config in state.get('settings', {}).get('ups_configs', []):
         ups_name, host, port = config.get('name'), config.get('ip'), config.get('port', 3493)
+        ups_id = config.get('id', generate_ups_id(ups_name, host))
         cache_key = f"{host}:{port}:{ups_name}"
         if ups_cache[cache_key]['data'] and (time.time() - ups_cache[cache_key]['timestamp']) < CACHE_TTL:
             all_ups_data.append(ups_cache[cache_key]['data'])
@@ -180,23 +233,48 @@ def get_ups_data():
             output = process.stdout
             data_map = {line.split(': ', 1)[0]: line.split(': ', 1)[1] for line in output.splitlines() if ': ' in line}
             status = data_map.get('ups.status', 'UNKNOWN').split()[0]
-            data = {'name': ups_name, 'status': status, 'battery': int(float(data_map.get('battery.charge', 0))), 'input_voltage': float(data_map.get('input.voltage', 0)), 'output_voltage': float(data_map.get('output.voltage', 0)), 'load': float(data_map.get('ups.load', 0))}
+            data = {
+                'id': ups_id,
+                'name': ups_name, 
+                'status': status, 
+                'battery': int(float(data_map.get('battery.charge', 0))), 
+                'input_voltage': float(data_map.get('input.voltage', 0)), 
+                'output_voltage': float(data_map.get('output.voltage', 0)), 
+                'load': float(data_map.get('ups.load', 0))
+            }
             ups_cache[cache_key] = {'data': data, 'timestamp': time.time()}
             all_ups_data.append(data)
         except subprocess.TimeoutExpired:
             add_log(f'UPS query for {ups_name}@{host} timed out.', 'WARNING')
-            all_ups_data.append({'name': ups_name, 'status': 'TIMEOUT', 'battery': 0, 'input_voltage': 0, 'output_voltage': 0, 'load': 0})
+            all_ups_data.append({'id': ups_id, 'name': ups_name, 'status': 'TIMEOUT', 'battery': 0, 'input_voltage': 0, 'output_voltage': 0, 'load': 0})
         except Exception as e:
             add_log(f'UPS query failed for {ups_name}@{host}: {e}', 'ERROR')
-            all_ups_data.append({'name': ups_name, 'status': 'ERROR', 'battery': 0, 'input_voltage': 0, 'output_voltage': 0, 'load': 0})
+            all_ups_data.append({'id': ups_id, 'name': ups_name, 'status': 'ERROR', 'battery': 0, 'input_voltage': 0, 'output_voltage': 0, 'load': 0})
     return all_ups_data
+
+def test_ups_connection(ups_config):
+    """Test connection to a specific UPS"""
+    try:
+        name, host, port = ups_config['name'], ups_config['ip'], ups_config.get('port', 3493)
+        cmd = ['upsc', f'{name}@{host}:{port}']
+        process = subprocess.run(cmd, capture_output=True, text=True, timeout=5, check=False)
+        
+        if process.returncode == 0:
+            return True, "Connection successful"
+        else:
+            error_msg = process.stderr.strip() if process.stderr else "Unknown error"
+            return False, f"Connection failed: {error_msg}"
+    except subprocess.TimeoutExpired:
+        return False, "Connection timeout"
+    except Exception as e:
+        return False, f"Error: {str(e)}"
 
 def is_device_online(ip):
     try:
         if ping(ip, timeout=0.8) is not None:
             for dev in state['devices']:
                 if dev['ip'] == ip:
-                    dev['last_seen'] = time.time()
+                    dev['last_seen'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     break
             return True
     except Exception as e:
@@ -273,6 +351,193 @@ def monitor_loop():
             logger.error(f"Error in monitor loop: {e}")
         time.sleep(POLL_INTERVAL)
 
+# ================================
+# SECURE REST API ENDPOINTS
+# ================================
+
+@app.route('/api/ups', methods=['POST'])
+@limiter.limit("5 per minute")
+def api_add_ups():
+    """Add a new UPS system"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Invalid JSON data'}), 400
+        
+        name = data.get('name', '').strip()
+        ip = data.get('ip', '').strip()
+        port = data.get('port', 3493)
+        
+        # Validation
+        if not name:
+            return jsonify({'success': False, 'message': 'UPS name is required'}), 400
+        if not is_valid_ip(ip):
+            return jsonify({'success': False, 'message': 'Invalid IP address'}), 400
+        if not isinstance(port, int) or not (1 <= port <= 65535):
+            return jsonify({'success': False, 'message': 'Port must be between 1 and 65535'}), 400
+        
+        # Check for duplicates
+        existing_names = [u['name'].lower() for u in state['settings']['ups_configs']]
+        if name.lower() in existing_names:
+            return jsonify({'success': False, 'message': f'UPS name "{name}" already exists'}), 400
+        
+        # Create new UPS with unique ID
+        new_ups = {
+            'id': generate_ups_id(name, ip),
+            'name': name,
+            'ip': ip,
+            'port': port
+        }
+        
+        state['settings']['ups_configs'].append(new_ups)
+        save_state()
+        add_log(f"Added UPS: {name}", 'INFO')
+        
+        return jsonify({'success': True, 'message': f'UPS {name} added successfully', 'ups': new_ups}), 201
+        
+    except Exception as e:
+        logger.error(f"Error adding UPS: {e}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+@app.route('/api/ups/<ups_id>', methods=['PUT'])
+@limiter.limit("10 per minute")
+def api_update_ups(ups_id):
+    """Update a specific UPS system"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Invalid JSON data'}), 400
+        
+        # Find UPS by ID
+        index, ups = find_ups_by_id(ups_id)
+        if ups is None:
+            return jsonify({'success': False, 'message': 'UPS not found'}), 404
+        
+        name = data.get('name', '').strip()
+        ip = data.get('ip', '').strip()
+        port = data.get('port', 3493)
+        
+        # Validation
+        if not name:
+            return jsonify({'success': False, 'message': 'UPS name is required'}), 400
+        if not is_valid_ip(ip):
+            return jsonify({'success': False, 'message': 'Invalid IP address'}), 400
+        if not isinstance(port, int) or not (1 <= port <= 65535):
+            return jsonify({'success': False, 'message': 'Port must be between 1 and 65535'}), 400
+        
+        # Check for duplicate names (excluding current UPS)
+        for i, u in enumerate(state['settings']['ups_configs']):
+            if i != index and u['name'].lower() == name.lower():
+                return jsonify({'success': False, 'message': f'UPS name "{name}" already exists'}), 400
+        
+        # Update UPS
+        state['settings']['ups_configs'][index].update({
+            'name': name,
+            'ip': ip,
+            'port': port
+        })
+        
+        save_state()
+        add_log(f"Updated UPS: {name}", 'INFO')
+        
+        return jsonify({'success': True, 'message': f'UPS {name} updated successfully'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error updating UPS {ups_id}: {e}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+@app.route('/api/ups/<ups_id>', methods=['DELETE'])
+@limiter.limit("10 per minute")
+def api_delete_ups(ups_id):
+    """Delete a specific UPS system"""
+    try:
+        # Find UPS by ID
+        index, ups = find_ups_by_id(ups_id)
+        if ups is None:
+            return jsonify({'success': False, 'message': 'UPS not found'}), 404
+        
+        ups_name = ups['name']
+        state['settings']['ups_configs'].pop(index)
+        save_state()
+        add_log(f"Removed UPS: {ups_name}", 'INFO')
+        
+        return jsonify({'success': True, 'message': f'UPS {ups_name} removed successfully'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error deleting UPS {ups_id}: {e}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+@app.route('/api/ups/test', methods=['POST'])
+@limiter.limit("10 per minute")
+def api_test_ups():
+    """Test connection to a UPS system"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Invalid JSON data'}), 400
+        
+        ups_config = {
+            'name': data.get('name', ''),
+            'ip': data.get('ip', ''),
+            'port': data.get('port', 3493)
+        }
+        
+        success, message = test_ups_connection(ups_config)
+        return jsonify({'success': success, 'message': message}), 200
+        
+    except Exception as e:
+        logger.error(f"Error testing UPS connection: {e}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+@app.route('/api/settings', methods=['PUT'])
+@limiter.limit("5 per minute")
+def api_update_settings():
+    """Update general application settings"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'Invalid JSON data'}), 400
+        
+        # Validate and update settings
+        try:
+            refresh_interval = int(data.get('refresh_interval', 30))
+            log_retention = int(data.get('log_retention', 100))
+            discovery_timeout = int(data.get('discovery_timeout', 2))
+            wol_battery_threshold = int(data.get('wol_battery_threshold', 80))
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': 'Invalid numeric values in settings'}), 400
+        
+        ip_scan_range = data.get('ip_scan_range', '192.168.1.0/24').strip()
+        if not re.match(r'^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/(?:[0-9]|[1-2][0-9]|3[0-2]))?$', ip_scan_range):
+            return jsonify({'success': False, 'message': 'Invalid IP scan range format'}), 400
+        
+        verbose_logging = data.get('verbose_logging', 'false')
+        if isinstance(verbose_logging, str):
+            verbose_logging = verbose_logging.lower() == 'true'
+        
+        # Update settings
+        state['settings'].update({
+            'refresh_interval': refresh_interval,
+            'log_retention': log_retention,
+            'ip_scan_range': ip_scan_range,
+            'discovery_timeout': discovery_timeout,
+            'wol_battery_threshold': wol_battery_threshold,
+            'verbose_logging': verbose_logging
+        })
+        
+        save_state()
+        add_log("General settings updated", 'INFO')
+        
+        return jsonify({'success': True, 'message': 'Settings updated successfully'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error updating settings: {e}")
+        return jsonify({'success': False, 'message': 'Internal server error'}), 500
+
+# ================================
+# ORIGINAL ROUTES (keeping for backward compatibility)
+# ================================
+
 @app.route('/')
 def dashboard():
     return render_template('dashboard.html', settings=state.get('settings', DEFAULT_SETTINGS))
@@ -315,7 +580,36 @@ def get_devices():
 @app.route('/get_logs')
 @limiter.limit("60 per minute")
 def get_logs():
-    return jsonify(logs=state['logs'][::-1])
+    return jsonify(logs=state['logs'])
+
+@app.route('/device_status/<ip>')
+@limiter.limit("60 per minute")
+def device_status(ip):
+    try:
+        device = next((d for d in state['devices'] if d.get('ip') == ip), None)
+        
+        if not device:
+            return jsonify({'online': False, 'last_seen': None})
+        
+        is_online = is_device_online(ip)
+        
+        if is_online:
+            device['last_seen'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            device['online'] = True
+            save_state()
+            last_seen = device['last_seen']
+        else:
+            device['online'] = False
+            last_seen = device.get('last_seen', None)
+        
+        return jsonify({
+            'online': is_online,
+            'last_seen': last_seen
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error checking device status for {ip}: {str(e)}")
+        return jsonify({'online': False, 'last_seen': None, 'error': str(e)})
 
 @app.route('/wake_device', methods=['POST'])
 @limiter.limit("10 per minute")
@@ -337,10 +631,10 @@ def add_device():
         existing_macs = {dev['mac'] for dev in state['devices'] if dev.get('mac')}
 
         if mac and not is_valid_mac(mac):
-            flash('Error: Invalid MAC address format. Please use XX:XX:XX:XX:XX:XX or XX-XX-XX-XX-XX-XX.', 'error')
+            flash('Error: Invalid MAC address format.', 'error')
             return render_template('add_device.html', settings=state.get('settings', DEFAULT_SETTINGS), prefill_ip=ip, prefill_mac=mac)
         if not is_valid_ip(ip):
-            flash('Error: Invalid IP address format. Please use a valid IPv4 address.', 'error')
+            flash('Error: Invalid IP address format.', 'error')
             return render_template('add_device.html', settings=state.get('settings', DEFAULT_SETTINGS), prefill_ip=ip, prefill_mac=mac)
 
         if ip in existing_ips:
@@ -425,6 +719,7 @@ def settings():
         except (ValueError, IndexError):
             flash('Error: Invalid UPS removal request.', 'error')
         return redirect(url_for('settings'))
+
     if request.method == 'POST':
         action = request.form.get('action')
         if action == 'add_ups':
@@ -443,8 +738,31 @@ def settings():
             if any(u['name'].lower() == name.strip().lower() for u in state['settings']['ups_configs']):
                 flash(f'Error: UPS name "{name}" already exists.', 'error')
             else:
-                state['settings']['ups_configs'].append({'name': name.strip(), 'ip': ip, 'port': port})
+                new_ups = {
+                    'id': generate_ups_id(name.strip(), ip),
+                    'name': name.strip(), 
+                    'ip': ip, 
+                    'port': port
+                }
+                state['settings']['ups_configs'].append(new_ups)
                 flash(f"Added UPS: {name}", 'success')
+        elif action == 'update_ups_inline':
+            ups_configs_json = request.form.get('ups_configs')
+            if ups_configs_json:
+                try:
+                    new_ups_configs = json.loads(ups_configs_json)
+                    for ups in new_ups_configs:
+                        if not ups.get('name', '').strip() or not is_valid_ip(ups.get('ip', '')) or not (1 <= ups.get('port', 0) <= 65535):
+                            flash('Error: Invalid UPS configuration', 'error')
+                            return redirect(url_for('settings'))
+                        # Ensure ID exists
+                        if 'id' not in ups:
+                            ups['id'] = generate_ups_id(ups['name'], ups['ip'])
+                    
+                    state['settings']['ups_configs'] = new_ups_configs
+                    flash('UPS configuration updated successfully', 'success')
+                except json.JSONDecodeError:
+                    flash('Error: Invalid configuration data', 'error')
         elif action == 'update_general':
             try:
                 refresh_interval = int(request.form.get('refresh_interval', 30))
@@ -504,6 +822,9 @@ def edit_ups(index):
                                    ups=ups_to_edit, index=index)
 
         ups_to_edit.update({'name': new_name, 'ip': new_ip, 'port': new_port})
+        # Ensure ID exists
+        if 'id' not in ups_to_edit:
+            ups_to_edit['id'] = generate_ups_id(new_name, new_ip)
         save_state()
         flash(f'Updated UPS: {new_name}', 'success')
         return redirect(url_for('settings'))
@@ -548,30 +869,35 @@ def device_detail(ip_address):
 def edit_device(index):
     if not (0 <= index < len(state['devices'])):
         return redirect(url_for('dashboard'))
+    
+    device_to_edit = state['devices'][index]
+
     if request.method == 'POST':
         name = request.form['name'].strip()
         mac = request.form.get('mac', '').strip().upper()
         ip = request.form['ip'].strip()
 
         if mac and not is_valid_mac(mac):
-            flash('Error: Invalid MAC address format. Please use XX:XX:XX:XX:XX:XX or XX-XX-XX-XX-XX-XX.', 'error')
-            return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=state['devices'][index], index=index)
+            flash('Error: Invalid MAC address format.', 'error')
+            return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=device_to_edit, index=index)
         if not is_valid_ip(ip):
-            flash('Error: Invalid IP address format. Please use a valid IPv4 address.', 'error')
-            return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=state['devices'][index], index=index)
+            flash('Error: Invalid IP address format.', 'error')
+            return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=device_to_edit, index=index)
 
         if any(d['ip'] == ip and i != index for i, d in enumerate(state['devices'])):
             flash(f'Error: IP {ip} already exists.', 'error')
-            return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=state['devices'][index], index=index)
+            return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=device_to_edit, index=index)
+        
         state['devices'][index].update({'name': name, 'mac': mac, 'ip': ip})
         save_state()
         flash(f'Updated device: {name}', 'success')
         return redirect(url_for('dashboard'))
-    return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=state['devices'][index], index=index)
+    
+    return render_template('edit_device.html', settings=state.get('settings', DEFAULT_SETTINGS), device=device_to_edit, index=index)
 
 if __name__ == '__main__':
     os.makedirs(DATA_DIR, exist_ok=True)
     with app.app_context():
         load_state()
     threading.Thread(target=monitor_loop, daemon=True).start()
-    serve(app, host='0.0.0.0', port=5000)
+    serve(app, host='0.0.0.0', port=5000, threads=10)

@@ -1,91 +1,475 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Edit Device - LumenTrace</title>
     <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
-    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    <link href="{{ url_for('static', filename='css/custom-vars.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
-    <style> body { font-family: 'Inter', sans-serif; } </style>
+    <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
 </head>
-<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}">
-    <div x-data="{ sidebarOpen: false }" class="flex h-screen">
-        <aside class="fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 bg-slate-950/80 backdrop-blur-xl border-r border-slate-800"
-            :class="{'translate-x-0': sidebarOpen, '-translate-x-full': !sidebarOpen}">
-            <div class="absolute top-0 right-0 p-4 lg:hidden"><button @click="sidebarOpen = false" class="text-gray-400"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button></div>
+<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}" 
+      x-data="editDeviceApp()" 
+      x-init="init()">
+    
+    <!-- Toast Container -->
+    <div id="toast-container" 
+         class="fixed top-4 right-4 z-50 space-y-2" 
+         x-show="toasts.length > 0"
+         x-transition>
+        <template x-for="toast in toasts" :key="toast.id">
+            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white"
+                 :class="toast.type === 'success' ? 'bg-green-600' : 
+                         toast.type === 'error' ? 'bg-red-600' : 
+                         toast.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'"
+                 x-show="toast.visible"
+                 x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 transform translate-x-full"
+                 x-transition:enter-end="opacity-100 transform translate-x-0"
+                 x-transition:leave="transition ease-in duration-200"
+                 x-transition:leave-start="opacity-100 transform translate-x-0"
+                 x-transition:leave-end="opacity-0 transform translate-x-full">
+                
+                <div class="flex-1">
+                    <p class="text-sm font-medium" x-text="toast.message"></p>
+                </div>
+                
+                <button @click="removeToast(toast.id)" class="flex-shrink-0 text-white/70 hover:text-white transition-colors">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div x-show="loading" 
+         x-transition:enter="transition-opacity ease-linear duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-linear duration-300"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-slate-900 rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <span class="text-white font-medium">Saving changes...</span>
+        </div>
+    </div>
+
+    <div class="flex h-screen">
+        <!-- Desktop Sidebar -->
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col">
             <div class="flex flex-col items-center justify-center p-6 space-y-2">
-                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto" />
                 <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
             </div>
+            
             <nav class="mt-10 px-6 space-y-2">
-                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>
+                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                    </svg>
                     Dashboard
                 </a>
                 <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
                     Settings
                 </a>
             </nav>
         </aside>
+
+        <!-- Main Content -->
         <div class="flex-1 flex flex-col overflow-hidden">
-            <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950/80 backdrop-blur-sm border-b border-slate-800"><button @click="sidebarOpen = true" class="text-gray-400 focus:outline-none"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg></button><h1 class="text-xl font-bold text-white">Edit Device</h1></header>
-            <main class="flex-1 overflow-y-auto p-4 sm:p-8">
-                <div class="max-w-2xl mx-auto">
+            <!-- Mobile Header -->
+            <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950 border-b border-slate-800">
+                <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                <h1 class="text-xl font-bold text-white">Edit Device</h1>
+                <div class="w-10"></div>
+            </header>
+            
+            <!-- Mobile Sidebar -->
+            <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform -translate-x-full transition-transform duration-300 ease-in-out lg:hidden">
+                <div class="absolute top-0 right-0 p-4">
+                    <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="flex flex-col items-center justify-center p-6 space-y-2 mt-8">
+                    <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto" />
+                    <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
+                </div>
+                
+                <nav class="mt-10 px-6 space-y-2">
+                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                        <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
+                        </svg>
+                        Dashboard
+                    </a>
+                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                        <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Settings
+                    </a>
+                </nav>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 overflow-y-auto">
+                <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <!-- Header -->
                     <header class="mb-8">
-                        <h1 class="text-3xl font-bold text-gray-200">Edit {{ device.name }}</h1>
-                        <p class="text-gray-400 mt-1">Update the details for this device.</p>
+                        <div class="flex items-center gap-3 mb-2">
+                            <a href="{{ url_for('dashboard') }}" class="text-gray-400 hover:text-white transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                            </a>
+                            <h1 class="text-3xl font-bold text-gray-200">Edit Device</h1>
+                        </div>
+                        <p class="text-gray-400">Update the details for {{ device.name }}.</p>
                     </header>
-                    
+
+                    <!-- Flash Messages (converted to toasts on page load) -->
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
-                            <div role="alert" class="mb-6 space-y-3" x-data="{ show: true }" x-init="setTimeout(() => show = false, 5000)" x-show="show" x-transition:leave="transition ease-in duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0">
+                            <div style="display: none;" id="flash-messages">
                                 {% for category, message in messages %}
-                                    <div class="p-4 rounded-md text-sm flex items-center justify-between {{ 'bg-red-500/20 text-red-300 border border-red-500/30' if category == 'error' else 'bg-green-500/20 text-green-300 border border-green-500/30' }}">
-                                        <div><span class="font-medium">{{ 'Error:' if category == 'error' else 'Success:' }}</span> {{ message }}</div>
-                                        <button @click="show = false" class="ml-4 text-gray-400 hover:text-white focus:outline-none" aria-label="Close message">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                        </button>
-                                    </div>
+                                    <div data-type="{{ category }}" data-message="{{ message }}"></div>
                                 {% endfor %}
                             </div>
                         {% endif %}
                     {% endwith %}
 
-                    <div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800">
-                        <form method="POST" action="{{ url_for('edit_device', index=index) }}" class="space-y-6 text-left">
+                    <!-- Device Info Card -->
+                    <div class="mb-6 p-6 rounded-lg bg-slate-900/30 border border-slate-800">
+                        <h3 class="text-lg font-semibold text-gray-200 mb-3">Current Device Status</h3>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                                <label for="name" class="block text-sm font-medium text-gray-300 mb-1">Device Name</label>
-                                <input type="text" id="name" name="name" value="{{ device.name }}" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700">
+                                <span class="text-gray-500">Status:</span>
+                                <span class="ml-2 font-medium" :class="deviceStatus === 'online' ? 'text-green-400' : 'text-red-400'">
+                                    <span x-text="deviceStatus === 'online' ? 'Online' : 'Offline'"></span>
+                                </span>
                             </div>
                             <div>
-                                <label for="mac" class="block text-sm font-medium text-gray-300 mb-1">MAC Address</label>
-                                <input type="text" id="mac" name="mac" value="{{ device.mac }}" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 font-mono"
-                                    pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
-                                    title="Please enter a valid MAC address (e.g., 00:1A:2B:3C:4D:5E or 00-1A-2B-3C-4D-5E)">
+                                <span class="text-gray-500">Last seen:</span>
+                                <span class="ml-2 font-medium text-gray-300" x-text="lastSeen || 'Never'"></span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit Device Form -->
+                    <div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
+                        <form @submit.prevent="submitForm" class="space-y-6">
+                            <!-- Device Name -->
                             <div>
-                                <label for="ip" class="block text-sm font-medium text-gray-300 mb-1">IP Address</label>
-                                <input type="text" id="ip" name="ip" value="{{ device.ip }}" required class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 font-mono"
-                                    pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-                                    title="Please enter a valid IPv4 address (e.g., 192.168.1.1)"
-                                    inputmode="decimal">
+                                <label for="name" class="block text-sm font-medium text-gray-300 mb-2">
+                                    Device Name
+                                    <span class="text-red-400">*</span>
+                                </label>
+                                <input type="text" 
+                                       id="name" 
+                                       x-model="formData.name"
+                                       required 
+                                       class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                       placeholder="e.g., Gaming PC, Office Printer"
+                                       :class="validationErrors.name ? 'border-red-500 focus:border-red-500' : ''">
+                                <p x-show="validationErrors.name" class="mt-1 text-sm text-red-400" x-text="validationErrors.name"></p>
                             </div>
-                            <div class="pt-6 flex flex-col sm:flex-row sm:justify-end space-y-3 sm:space-y-0 sm:space-x-4">
-                                <a href="{{ url_for('dashboard') }}" class="w-full sm:w-auto text-center px-6 py-3 rounded-lg font-semibold bg-slate-700/50 text-gray-300 hover:bg-slate-600">Cancel</a>
-                                <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-lg font-semibold flex items-center justify-center bg-blue-600 text-white hover:bg-blue-700">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 mr-2 -ml-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                                    </svg>
-                                    Save Changes
-                                </button>
+
+                            <!-- IP Address -->
+                            <div>
+                                <label for="ip" class="block text-sm font-medium text-gray-300 mb-2">
+                                    IP Address
+                                    <span class="text-red-400">*</span>
+                                </label>
+                                <input type="text" 
+                                       id="ip" 
+                                       x-model="formData.ip"
+                                       required 
+                                       class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
+                                       placeholder="e.g., 192.168.1.100"
+                                       pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+                                       :class="validationErrors.ip ? 'border-red-500 focus:border-red-500' : ''">
+                                <p x-show="validationErrors.ip" class="mt-1 text-sm text-red-400" x-text="validationErrors.ip"></p>
+                            </div>
+
+                            <!-- MAC Address -->
+                            <div>
+                                <label for="mac" class="block text-sm font-medium text-gray-300 mb-2">
+                                    MAC Address
+                                    <span class="text-gray-500">(Optional)</span>
+                                </label>
+                                <input type="text" 
+                                       id="mac" 
+                                       x-model="formData.mac"
+                                       class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono uppercase"
+                                       placeholder="e.g., AA:BB:CC:DD:EE:FF"
+                                       pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+                                       @input="formData.mac = $event.target.value.toUpperCase()"
+                                       :class="validationErrors.mac ? 'border-red-500 focus:border-red-500' : ''">
+                                <p x-show="validationErrors.mac" class="mt-1 text-sm text-red-400" x-text="validationErrors.mac"></p>
+                                <p class="mt-2 text-sm text-gray-500">Required for Wake-on-LAN functionality. Leave blank and LumenTrace will automatically discover it when you save.</p>
+                            </div>
+
+                            <!-- Form Actions -->
+                            <div class="pt-6 border-t border-slate-700">
+                                <div class="flex flex-col sm:flex-row gap-4">
+                                    <button type="submit" 
+                                            :disabled="loading || !hasChanges()"
+                                            class="flex-1 flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                        <svg class="w-5 h-5 mr-2 -ml-1" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                        </svg>
+                                        <span x-text="loading ? 'Saving...' : 'Save Changes'"></span>
+                                    </button>
+                                    <a href="{{ url_for('dashboard') }}" 
+                                       class="flex-1 text-center px-6 py-3 rounded-lg font-semibold bg-slate-700 text-gray-300 hover:bg-slate-600 transition-colors">
+                                        Cancel
+                                    </a>
+                                </div>
+                                <p x-show="!hasChanges()" class="mt-2 text-sm text-gray-500 text-center">
+                                    No changes to save
+                                </p>
                             </div>
                         </form>
+                    </div>
+
+                    <!-- Danger Zone -->
+                    <div class="mt-8 p-6 rounded-lg bg-red-900/10 border border-red-900/20">
+                        <h3 class="text-lg font-semibold text-red-400 mb-3">Danger Zone</h3>
+                        <p class="text-sm text-gray-400 mb-4">
+                            Removing this device will delete it from your dashboard. This action cannot be undone.
+                        </p>
+                        <button @click="deleteDevice" 
+                                :disabled="loading"
+                                class="px-4 py-2 rounded-lg font-semibold border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            Delete Device
+                        </button>
                     </div>
                 </div>
             </main>
         </div>
     </div>
+
+    <!-- Mobile JavaScript -->
+    <script>
+    function toggleMobileSidebar() {
+        const sidebar = document.getElementById('mobile-sidebar');
+        sidebar.classList.toggle('-translate-x-full');
+    }
+    </script>
+
+    <script>
+        function editDeviceApp() {
+            return {
+                // State
+                loading: false,
+                toasts: [],
+                deviceStatus: 'unknown',
+                lastSeen: null,
+                
+                // Original data for comparison
+                originalData: {
+                    name: '{{ device.name }}',
+                    ip: '{{ device.ip }}',
+                    mac: '{{ device.mac }}'
+                },
+                
+                // Form data
+                formData: {
+                    name: '{{ device.name }}',
+                    ip: '{{ device.ip }}',
+                    mac: '{{ device.mac }}'
+                },
+                
+                // Validation
+                validationErrors: {},
+                
+                // Initialization
+                init() {
+                    this.processFlashMessages();
+                    this.checkDeviceStatus();
+                },
+                
+                // Check if form has changes
+                hasChanges() {
+                    return this.formData.name !== this.originalData.name ||
+                           this.formData.ip !== this.originalData.ip ||
+                           this.formData.mac !== this.originalData.mac;
+                },
+                
+                // Process Flask flash messages into toasts
+                processFlashMessages() {
+                    const flashContainer = document.getElementById('flash-messages');
+                    if (flashContainer) {
+                        const messages = flashContainer.querySelectorAll('div[data-type]');
+                        messages.forEach(msg => {
+                            const type = msg.getAttribute('data-type');
+                            const message = msg.getAttribute('data-message');
+                            this.showToast(message, type === 'error' ? 'error' : 'success');
+                        });
+                    }
+                },
+                
+                // Check device online status
+                async checkDeviceStatus() {
+                    try {
+                        const response = await fetch(`/device_status/${encodeURIComponent(this.formData.ip)}`);
+                        const data = await response.json();
+                        this.deviceStatus = data.online ? 'online' : 'offline';
+                        this.lastSeen = data.last_seen || null;
+                    } catch (error) {
+                        this.deviceStatus = 'unknown';
+                    }
+                },
+                
+                // Form submission
+                async submitForm() {
+                    this.validationErrors = {};
+                    
+                    // Client-side validation
+                    if (!this.validateForm()) {
+                        return;
+                    }
+                    
+                    this.loading = true;
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('name', this.formData.name);
+                        formData.append('ip', this.formData.ip);
+                        formData.append('mac', this.formData.mac);
+                        
+                        const response = await fetch('{{ url_for("edit_device", index=index) }}', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (response.ok) {
+                            this.showToast('Device updated successfully!', 'success');
+                            // Update original data to match saved data
+                            this.originalData = { ...this.formData };
+                            
+                            // Redirect after short delay
+                            setTimeout(() => {
+                                window.location.href = '{{ url_for("dashboard") }}';
+                            }, 1500);
+                        } else {
+                            this.showToast('Failed to update device. Please try again.', 'error');
+                        }
+                    } catch (error) {
+                        this.showToast('Network error occurred', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                // Form validation
+                validateForm() {
+                    let isValid = true;
+                    
+                    // Name validation
+                    if (!this.formData.name.trim()) {
+                        this.validationErrors.name = 'Device name is required';
+                        isValid = false;
+                    }
+                    
+                    // IP validation
+                    const ipPattern = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+                    if (!this.formData.ip.trim()) {
+                        this.validationErrors.ip = 'IP address is required';
+                        isValid = false;
+                    } else if (!ipPattern.test(this.formData.ip)) {
+                        this.validationErrors.ip = 'Please enter a valid IP address';
+                        isValid = false;
+                    }
+                    
+                    // MAC validation (optional)
+                    if (this.formData.mac.trim()) {
+                        const macPattern = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+                        if (!macPattern.test(this.formData.mac)) {
+                            this.validationErrors.mac = 'Please enter a valid MAC address';
+                            isValid = false;
+                        }
+                    }
+                    
+                    return isValid;
+                },
+                
+                // Delete device
+                async deleteDevice() {
+                    if (!confirm('Are you sure you want to delete {{ device.name }}? This action cannot be undone.')) {
+                        return;
+                    }
+                    
+                    this.loading = true;
+                    
+                    try {
+                        const response = await fetch('/remove_device', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ index: {{ index }} })
+                        });
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            this.showToast('Device deleted successfully!', 'success');
+                            setTimeout(() => {
+                                window.location.href = '{{ url_for("dashboard") }}';
+                            }, 1500);
+                        } else {
+                            this.showToast('Failed to delete device. Please try again.', 'error');
+                        }
+                    } catch (error) {
+                        this.showToast('Network error occurred', 'error');
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                // Toast system
+                showToast(message, type = 'info') {
+                    const id = Date.now();
+                    const toast = { id, message, type, visible: true };
+                    this.toasts.push(toast);
+                    
+                    // Auto remove after 5 seconds
+                    setTimeout(() => {
+                        this.removeToast(id);
+                    }, 5000);
+                },
+                
+                removeToast(id) {
+                    const index = this.toasts.findIndex(t => t.id === id);
+                    if (index > -1) {
+                        this.toasts[index].visible = false;
+                        setTimeout(() => {
+                            this.toasts.splice(index, 1);
+                        }, 200);
+                    }
+                }
+            };
+        }
+    </script>
 </body>
 </html>
