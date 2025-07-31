@@ -3,43 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Add Device - LumenTrace</title>
     <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/custom-vars.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/light-theme.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        input, select, textarea {
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        
+        @keyframes checkmark {
+            0% {
+                transform: scale(0) rotate(45deg);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2) rotate(45deg);
+            }
+            100% {
+                transform: scale(1) rotate(45deg);
+                opacity: 1;
+            }
+        }
+        
+        .checkmark-animate {
+            animation: checkmark 0.3s ease-out;
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}" 
+<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }} {% if settings.theme == 'light' %}light-theme{% endif %}" 
       x-data="addDeviceApp()" 
-      x-init="init()">
+      x-init="safeInit()"
+      @keydown.escape="handleEscape">
     
-    <!-- Toast Container -->
     <div id="toast-container" 
-         class="fixed top-4 right-4 z-50 space-y-2" 
+         class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none" 
          x-show="toasts.length > 0"
-         x-transition>
+         x-transition
+         role="region"
+         aria-label="Notifications"
+         aria-live="polite">
         <template x-for="toast in toasts" :key="toast.id">
-            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white"
-                 :class="toast.type === 'success' ? 'bg-green-600' : 
-                         toast.type === 'error' ? 'bg-red-600' : 
-                         toast.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'"
+            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white pointer-events-auto"
+                 :class="{
+                     'bg-green-600': toast.type === 'success',
+                     'bg-red-600': toast.type === 'error',
+                     'bg-yellow-600': toast.type === 'warning',
+                     'bg-blue-600': toast.type === 'info'
+                 }"
                  x-show="toast.visible"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform translate-x-full"
                  x-transition:enter-end="opacity-100 transform translate-x-0"
                  x-transition:leave="transition ease-in duration-200"
                  x-transition:leave-start="opacity-100 transform translate-x-0"
-                 x-transition:leave-end="opacity-0 transform translate-x-full">
+                 x-transition:leave-end="opacity-0 transform translate-x-full"
+                 role="alert">
+                
+                <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path x-show="toast.type === 'success'" fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'error'" fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'warning'" fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'info'" fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
                 
                 <div class="flex-1">
                     <p class="text-sm font-medium" x-text="toast.message"></p>
                 </div>
                 
-                <button @click="removeToast(toast.id)" class="flex-shrink-0 text-white/70 hover:text-white transition-colors">
+                <button @click="removeToast(toast.id)" 
+                        class="flex-shrink-0 text-white/70 hover:text-white transition-colors focus-visible"
+                        aria-label="Dismiss notification">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                     </svg>
@@ -48,7 +101,6 @@
         </template>
     </div>
 
-    <!-- Loading Overlay -->
     <div x-show="loading" 
          x-transition:enter="transition-opacity ease-linear duration-300"
          x-transition:enter-start="opacity-0"
@@ -56,30 +108,52 @@
          x-transition:leave="transition-opacity ease-linear duration-300"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center">
+         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center"
+         role="status"
+         aria-live="polite">
         <div class="bg-slate-900 rounded-lg p-6 flex items-center space-x-3">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span class="text-white font-medium">Adding device...</span>
+            <div class="loading-spinner rounded-full h-8 w-8 border-b-2 border-blue-500" aria-hidden="true"></div>
+            <span class="text-white font-medium" x-text="loadingMessage">Adding device...</span>
+        </div>
+    </div>
+
+    <div x-show="showSuccess" 
+         x-transition:enter="transition-opacity ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition-opacity ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center"
+         role="status"
+         aria-live="polite">
+        <div class="bg-slate-900 rounded-lg p-8 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-green-500 rounded-full flex items-center justify-center">
+                <svg class="w-10 h-10 text-white checkmark-animate" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                </svg>
+            </div>
+            <h3 class="text-xl font-semibold text-white mb-2">Device Added Successfully!</h3>
+            <p class="text-gray-400 mb-4">Redirecting to dashboard...</p>
         </div>
     </div>
 
     <div class="flex h-screen">
-        <!-- Desktop Sidebar -->
-        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col">
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col" role="navigation">
             <div class="flex flex-col items-center justify-center p-6 space-y-2">
                 <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto" />
                 <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
             </div>
             
-            <nav class="mt-10 px-6 space-y-2">
-                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
-                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+            <nav class="mt-10 px-6 space-y-2" aria-label="Main navigation">
+                <a href="{{ url_for('dashboard.dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
+                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                     </svg>
                     Dashboard
                 </a>
-                <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
-                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <a href="{{ url_for('settings.settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
+                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
@@ -88,11 +162,13 @@
             </nav>
         </aside>
 
-        <!-- Main Content -->
         <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- Mobile Header -->
             <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950 border-b border-slate-800">
-                <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                <button @click="toggleMobileSidebar" 
+                        class="text-gray-400 hover:text-white p-2 rounded-md transition-colors focus-visible"
+                        aria-label="Toggle mobile navigation"
+                        aria-expanded="false"
+                        aria-controls="mobile-sidebar">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
@@ -101,10 +177,14 @@
                 <div class="w-10"></div>
             </header>
             
-            <!-- Mobile Sidebar -->
-            <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform -translate-x-full transition-transform duration-300 ease-in-out lg:hidden">
+            <aside id="mobile-sidebar" 
+                   class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform transition-transform duration-300 ease-in-out lg:hidden"
+                   :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
+                   role="navigation">
                 <div class="absolute top-0 right-0 p-4">
-                    <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                    <button @click="toggleMobileSidebar" 
+                            class="text-gray-400 hover:text-white p-2 rounded-md transition-colors focus-visible"
+                            aria-label="Close mobile navigation">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -116,14 +196,14 @@
                     <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
                 </div>
                 
-                <nav class="mt-10 px-6 space-y-2">
-                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                <nav class="mt-10 px-6 space-y-2" aria-label="Mobile navigation">
+                    <a href="{{ url_for('dashboard.dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
                         <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                         </svg>
                         Dashboard
                     </a>
-                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                    <a href="{{ url_for('settings.settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
                         <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -133,16 +213,33 @@
                 </nav>
             </aside>
 
-            <!-- Main Content Area -->
-            <main class="flex-1 overflow-y-auto">
+            <div x-show="mobileMenuOpen" 
+                 @click="toggleMobileSidebar"
+                 class="fixed inset-0 z-30 bg-black bg-opacity-50 lg:hidden"
+                 x-transition:enter="transition-opacity ease-linear duration-300"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition-opacity ease-linear duration-300"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 aria-hidden="true"></div>
+
+            <main class="flex-1 overflow-y-auto" role="main">
                 <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    <!-- Header -->
                     <header class="mb-8">
-                        <h1 class="text-3xl font-bold text-gray-200">Add New Device</h1>
-                        <p class="text-gray-400 mt-1">Enter the details for the new device to monitor.</p>
+                        <div class="flex items-center gap-3 mb-2">
+                            <a href="{{ url_for('dashboard.dashboard') }}" 
+                               class="text-gray-400 hover:text-white transition-colors focus-visible rounded-md p-1"
+                               aria-label="Back to dashboard">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                            </a>
+                            <h1 class="text-3xl font-bold text-gray-200">Add New Device</h1>
+                        </div>
+                        <p class="text-gray-400">Enter the details for the new device to monitor.</p>
                     </header>
 
-                    <!-- Flash Messages (converted to toasts on page load) -->
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
                             <div style="display: none;" id="flash-messages">
@@ -153,75 +250,175 @@
                         {% endif %}
                     {% endwith %}
 
-                    <!-- Add Device Form -->
+                    <div class="mb-6 flex items-center justify-center space-x-2" role="progressbar" aria-label="Form completion progress">
+                        <template x-for="i in 3" :key="i">
+                            <div class="h-2 w-16 rounded-full transition-colors duration-300"
+                                 :class="getProgressStep() >= i ? 'bg-blue-500' : 'bg-slate-700'"></div>
+                        </template>
+                    </div>
+
                     <div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
                         <form @submit.prevent="submitForm" class="space-y-6">
-                            <!-- Device Name -->
                             <div>
                                 <label for="name" class="block text-sm font-medium text-gray-300 mb-2">
                                     Device Name
                                     <span class="text-red-400">*</span>
                                 </label>
-                                <input type="text" 
-                                       id="name" 
-                                       x-model="formData.name"
-                                       required 
-                                       class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                       placeholder="e.g., Gaming PC, Office Printer"
-                                       :class="validationErrors.name ? 'border-red-500 focus:border-red-500' : ''">
-                                <p x-show="validationErrors.name" class="mt-1 text-sm text-red-400" x-text="validationErrors.name"></p>
+                                <div class="relative">
+                                    <input type="text" 
+                                           id="name" 
+                                           x-model="formData.name"
+                                           @blur="validateField('name')"
+                                           @input="clearFieldError('name')"
+                                           required 
+                                           autocomplete="off"
+                                           class="w-full p-3 pr-10 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                           placeholder="e.g., Gaming PC, Office Printer"
+                                           :class="{
+                                               'border-red-500 focus:border-red-500': validationErrors.name,
+                                               'border-green-500': formData.name && !validationErrors.name
+                                           }"
+                                           :aria-describedby="validationErrors.name ? 'name-error' : 'name-hint'"
+                                           :aria-invalid="validationErrors.name ? 'true' : 'false'">
+                                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                        <svg x-show="formData.name && !validationErrors.name" class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                        <svg x-show="validationErrors.name" class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <p x-show="validationErrors.name" id="name-error" class="mt-1 text-sm text-red-400" x-text="validationErrors.name" role="alert"></p>
+                                <p x-show="!validationErrors.name" id="name-hint" class="mt-1 text-sm text-gray-500">Choose a descriptive name to easily identify this device</p>
                             </div>
 
-                            <!-- IP Address -->
                             <div>
                                 <label for="ip" class="block text-sm font-medium text-gray-300 mb-2">
                                     IP Address
                                     <span class="text-red-400">*</span>
                                 </label>
-                                <input type="text" 
-                                       id="ip" 
-                                       x-model="formData.ip"
-                                       value="{{ prefill_ip }}"
-                                       required 
-                                       class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
-                                       placeholder="e.g., 192.168.1.100"
-                                       pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-                                       :class="validationErrors.ip ? 'border-red-500 focus:border-red-500' : ''">
-                                <p x-show="validationErrors.ip" class="mt-1 text-sm text-red-400" x-text="validationErrors.ip"></p>
+                                <div class="relative">
+                                    <input type="text" 
+                                           id="ip" 
+                                           x-model="formData.ip"
+                                           @blur="validateField('ip')"
+                                           @input="onIpChange"
+                                           required 
+                                           autocomplete="off"
+                                           class="w-full p-3 pr-10 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
+                                           placeholder="e.g., 192.168.1.100"
+                                           pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+                                           :class="{
+                                               'border-red-500 focus:border-red-500': validationErrors.ip,
+                                               'border-green-500': isValidIP && !validationErrors.ip
+                                           }"
+                                           :aria-describedby="validationErrors.ip ? 'ip-error' : 'ip-hint'"
+                                           :aria-invalid="validationErrors.ip ? 'true' : 'false'">
+                                    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                        <svg x-show="isValidIP && !validationErrors.ip" class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                        <svg x-show="validationErrors.ip" class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                </div>
+                                <p x-show="validationErrors.ip" id="ip-error" class="mt-1 text-sm text-red-400" x-text="validationErrors.ip" role="alert"></p>
+                                <p x-show="!validationErrors.ip" id="ip-hint" class="mt-1 text-sm text-gray-500">
+                                    <span x-show="!ipReachable && isValidIP" class="text-yellow-400">
+                                        <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                        </svg>
+                                        This IP might not be reachable
+                                    </span>
+                                    <span x-show="ipReachable === null || !isValidIP">Static IP or DHCP reservation recommended</span>
+                                </p>
                             </div>
 
-                            <!-- MAC Address -->
                             <div>
                                 <label for="mac" class="block text-sm font-medium text-gray-300 mb-2">
                                     MAC Address
                                     <span class="text-gray-500">(Optional)</span>
                                 </label>
-                                <input type="text" 
-                                       id="mac" 
-                                       x-model="formData.mac"
-                                       value="{{ prefill_mac }}"
-                                       class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono uppercase"
-                                       placeholder="e.g., AA:BB:CC:DD:EE:FF"
-                                       pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
-                                       @input="formData.mac = $event.target.value.toUpperCase()"
-                                       :class="validationErrors.mac ? 'border-red-500 focus:border-red-500' : ''">
-                                <p x-show="validationErrors.mac" class="mt-1 text-sm text-red-400" x-text="validationErrors.mac"></p>
-                                <p class="mt-2 text-sm text-gray-500">Required for Wake-on-LAN functionality. Leave blank and LumenTrace will automatically discover it when you save.</p>
+                                <div class="flex gap-2">
+                                    <div class="relative flex-1">
+                                        <input type="text" 
+                                               id="mac" 
+                                               x-model="formData.mac"
+                                               @blur="validateField('mac')"
+                                               @input="onMacInput"
+                                               autocomplete="off"
+                                               class="w-full p-3 pr-10 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono uppercase"
+                                               placeholder="e.g., AA:BB:CC:DD:EE:FF"
+                                               pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$"
+                                               :class="{
+                                                   'border-red-500 focus:border-red-500': validationErrors.mac,
+                                                   'border-green-500': isValidMAC && !validationErrors.mac
+                                               }"
+                                               :aria-describedby="validationErrors.mac ? 'mac-error' : 'mac-hint'"
+                                               :aria-invalid="validationErrors.mac ? 'true' : 'false'">
+                                        <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                            <svg x-show="isValidMAC && !validationErrors.mac" class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                            </svg>
+                                            <svg x-show="validationErrors.mac" class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <button type="button"
+                                            @click="discoverMac"
+                                            :disabled="!isValidIP || discoveringMac || loading"
+                                            class="px-4 py-3 rounded-lg border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap focus-visible">
+                                        <span x-show="!discoveringMac" class="flex items-center">
+                                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
+                                            Discover
+                                        </span>
+                                        <span x-show="discoveringMac" class="flex items-center">
+                                            <div class="loading-spinner w-4 h-4 mr-2 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                                            Discovering...
+                                        </span>
+                                    </button>
+                                </div>
+                                <p x-show="validationErrors.mac" id="mac-error" class="mt-1 text-sm text-red-400" x-text="validationErrors.mac" role="alert"></p>
+                                <p x-show="!validationErrors.mac" id="mac-hint" class="mt-2 text-sm text-gray-500">
+                                    <span x-show="macDiscoveryAttempted && !formData.mac" class="text-yellow-400">
+                                        Could not auto-discover MAC address. You can enter it manually or save without it.
+                                    </span>
+                                    <span x-show="!macDiscoveryAttempted || formData.mac">Required for Wake-on-LAN functionality. Leave blank to auto-discover when saving.</span>
+                                </p>
                             </div>
 
-                            <!-- Form Actions -->
                             <div class="pt-6 border-t border-slate-700">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center space-x-2 text-sm text-gray-400">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                        </svg>
+                                        <span>All fields marked with * are required</span>
+                                    </div>
+                                    <div x-show="isFormValid()" class="flex items-center space-x-2 text-sm text-green-400">
+                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                        <span>Ready to add device</span>
+                                    </div>
+                                </div>
+                                
                                 <div class="flex flex-col sm:flex-row gap-4">
                                     <button type="submit" 
-                                            :disabled="loading"
-                                            class="flex-1 flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                            :disabled="loading || isSubmitting || !isFormValid()"
+                                            class="flex-1 flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all focus-visible">
                                         <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                         </svg>
-                                        <span x-text="loading ? 'Adding...' : 'Add Device'"></span>
+                                        <span x-text="loading || isSubmitting ? 'Adding Device...' : 'Add Device'"></span>
                                     </button>
-                                    <a href="{{ url_for('dashboard') }}" 
-                                       class="flex-1 text-center px-6 py-3 rounded-lg font-semibold bg-slate-700 text-gray-300 hover:bg-slate-600 transition-colors">
+                                    <a href="{{ url_for('dashboard.dashboard') }}" 
+                                       class="flex-1 text-center px-6 py-3 rounded-lg font-semibold bg-slate-700 text-gray-300 hover:bg-slate-600 transition-colors focus-visible">
                                         Cancel
                                     </a>
                                 </div>
@@ -229,27 +426,37 @@
                         </form>
                     </div>
 
-                    <!-- Help Text -->
                     <div class="mt-8 p-6 rounded-lg bg-slate-900/30 border border-slate-800">
-                        <h3 class="text-lg font-semibold text-gray-200 mb-3">Tips for adding devices</h3>
+                        <h3 class="text-lg font-semibold text-gray-200 mb-3 flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                            </svg>
+                            Tips for adding devices
+                        </h3>
                         <ul class="space-y-2 text-sm text-gray-400">
                             <li class="flex items-start">
-                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                                 </svg>
                                 <span>Use a descriptive name to easily identify your devices in the dashboard.</span>
                             </li>
                             <li class="flex items-start">
-                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                                 </svg>
                                 <span>Ensure the device has a static IP address or DHCP reservation for reliable monitoring.</span>
                             </li>
                             <li class="flex items-start">
-                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                                 </svg>
                                 <span>The MAC address is required for Wake-on-LAN. Enable WOL in the device's BIOS/UEFI settings.</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                <span>If auto-discovery fails, you can find the MAC address in your device's network settings.</span>
                             </li>
                         </ul>
                     </div>
@@ -258,38 +465,84 @@
         </div>
     </div>
 
-    <!-- Mobile JavaScript -->
-    <script>
-    function toggleMobileSidebar() {
-        const sidebar = document.getElementById('mobile-sidebar');
-        sidebar.classList.toggle('-translate-x-full');
-    }
-    </script>
-
     <script>
         function addDeviceApp() {
             return {
-                // State
                 loading: false,
+                loadingMessage: 'Adding device...',
+                isSubmitting: false,
                 discoveringMac: false,
+                macDiscoveryAttempted: false,
+                showSuccess: false,
                 toasts: [],
+                mobileMenuOpen: false,
+                theme: '{{ settings.theme if settings.theme else "dark" }}',
                 
-                // Form data
                 formData: {
                     name: '',
-                    ip: '{{ prefill_ip }}',
-                    mac: '{{ prefill_mac }}'
+                    ip: '{{ prefill_ip | default("", true) }}',
+                    mac: '{{ prefill_mac | default("", true) }}'
                 },
                 
-                // Validation
+                ipReachable: null,
                 validationErrors: {},
-                
-                // Initialization
-                init() {
-                    this.processFlashMessages();
+                validationRules: {
+                    name: {
+                        required: true,
+                        requiredMessage: 'Device name is required',
+                        min: 1,
+                        max: 100,
+                        maxMessage: 'Device name must be no more than 100 characters'
+                    },
+                    ip: {
+                        required: true,
+                        requiredMessage: 'IP address is required',
+                        pattern: LumenTrace.CONSTANTS.VALIDATION.IP_PATTERN,
+                        patternMessage: 'Please enter a valid IP address (e.g., 192.168.1.100)'
+                    },
+                    mac: {
+                        required: false,
+                        pattern: LumenTrace.CONSTANTS.VALIDATION.MAC_PATTERN,
+                        patternMessage: 'Please enter a valid MAC address (e.g., AA:BB:CC:DD:EE:FF)'
+                    }
                 },
                 
-                // Process Flask flash messages into toasts
+                get isValidIP() {
+                    return LumenTrace.Utils.validateIP(this.formData.ip);
+                },
+                
+                get isValidMAC() {
+                    return this.formData.mac && LumenTrace.Utils.validateMAC(this.formData.mac);
+                },
+                
+                safeInit() {
+                    try {
+                        this.init();
+                    } catch (error) {
+                        console.error('Add device initialization failed:', error);
+                        this.showToast('Initialization failed', 'error');
+                    }
+                },
+                
+                init() {
+                    LumenTrace.ToastManager.setAlpineComponent(this);
+                    
+                    LumenTrace.ThemeManager.init(this.theme);
+                    
+                    this.processFlashMessages();
+                    
+                    this.$nextTick(() => {
+                        const nameInput = document.getElementById('name');
+                        if (nameInput && !this.formData.name) {
+                            nameInput.focus();
+                        }
+                    });
+                    
+                    if (this.formData.ip) {
+                        this.checkIpReachability();
+                    }
+                },
+                
                 processFlashMessages() {
                     const flashContainer = document.getElementById('flash-messages');
                     if (flashContainer) {
@@ -302,116 +555,196 @@
                     }
                 },
                 
-                // Form submission
-                async submitForm() {
-                    this.validationErrors = {};
+                toggleMobileSidebar() {
+                    this.mobileMenuOpen = !this.mobileMenuOpen;
+                    const button = document.querySelector('[aria-controls="mobile-sidebar"]');
+                    if (button) {
+                        button.setAttribute('aria-expanded', this.mobileMenuOpen);
+                    }
+                },
+                
+                handleEscape() {
+                    if (this.mobileMenuOpen) {
+                        this.toggleMobileSidebar();
+                    }
+                },
+                
+                getProgressStep() {
+                    let step = 0;
+                    if (this.formData.name) step++;
+                    if (this.isValidIP) step++;
+                    if (this.isValidMAC || this.macDiscoveryAttempted) step++;
+                    return step;
+                },
+                
+                validateField(field) {
+                    const value = this.formData[field];
+                    const rules = this.validationRules[field];
                     
-                    // Client-side validation
-                    if (!this.validateForm()) {
+                    if (!rules) return;
+                    
+                    delete this.validationErrors[field];
+                    
+                    if (rules.required && (!value || !value.toString().trim())) {
+                        this.validationErrors[field] = rules.requiredMessage || `${field} is required`;
                         return;
                     }
                     
-                    this.loading = true;
-                    
-                    try {
-                        const formData = new FormData();
-                        formData.append('name', this.formData.name);
-                        formData.append('ip', this.formData.ip);
-                        formData.append('mac', this.formData.mac);
-                        
-                        const response = await fetch('{{ url_for("add_device") }}', {
-                            method: 'POST',
-                            body: formData
-                        });
-                        
-                        if (response.ok) {
-                            // Redirect to dashboard on success
-                            window.location.href = '{{ url_for("dashboard") }}';
-                        } else {
-                            this.showToast('Failed to add device. Please try again.', 'error');
-                        }
-                    } catch (error) {
-                        this.showToast('Network error occurred', 'error');
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-                
-                // Form validation
-                validateForm() {
-                    let isValid = true;
-                    
-                    // Name validation
-                    if (!this.formData.name.trim()) {
-                        this.validationErrors.name = 'Device name is required';
-                        isValid = false;
+                    if (value && rules.pattern && !rules.pattern.test(value)) {
+                        this.validationErrors[field] = rules.patternMessage || `Invalid ${field} format`;
+                        return;
                     }
                     
-                    // IP validation
-                    const ipPattern = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-                    if (!this.formData.ip.trim()) {
-                        this.validationErrors.ip = 'IP address is required';
-                        isValid = false;
-                    } else if (!ipPattern.test(this.formData.ip)) {
-                        this.validationErrors.ip = 'Please enter a valid IP address';
-                        isValid = false;
-                    }
-                    
-                    // MAC validation (optional)
-                    if (this.formData.mac.trim()) {
-                        const macPattern = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
-                        if (!macPattern.test(this.formData.mac)) {
-                            this.validationErrors.mac = 'Please enter a valid MAC address';
-                            isValid = false;
+                    if (value && rules.min !== undefined) {
+                        const length = value.toString().length;
+                        if (length < rules.min) {
+                            this.validationErrors[field] = rules.minMessage || `${field} must be at least ${rules.min} characters`;
+                            return;
                         }
                     }
                     
-                    return isValid;
+                    if (value && rules.max !== undefined) {
+                        const length = value.toString().length;
+                        if (length > rules.max) {
+                            this.validationErrors[field] = rules.maxMessage || `${field} must be no more than ${rules.max} characters`;
+                            return;
+                        }
+                    }
                 },
                 
-                // Discover MAC address
+                clearFieldError(field) {
+                    delete this.validationErrors[field];
+                },
+                
+                isFormValid() {
+                    return this.formData.name.trim() && 
+                           this.isValidIP && 
+                           !this.validationErrors.name && 
+                           !this.validationErrors.ip && 
+                           !this.validationErrors.mac;
+                },
+                
+                onIpChange() {
+                    this.clearFieldError('ip');
+                    this.ipReachable = null;
+                    
+                    if (this.isValidIP) {
+                        this.debouncedCheckIp();
+                    }
+                },
+                
+                debouncedCheckIp: LumenTrace.Utils.debounce(function() {
+                    this.checkIpReachability();
+                }, 1000),
+                
+                async checkIpReachability() {
+                    if (!this.isValidIP) return;
+                    
+                    this.ipReachable = true;
+                },
+                
+                onMacInput(event) {
+                    let value = event.target.value.toUpperCase();
+                    
+                    value = value.replace(/[^0-9A-F]/g, '');
+                    
+                    if (value.length > 2) {
+                        const parts = value.match(/.{1,2}/g);
+                        value = parts.join(':');
+                    }
+                    
+                    if (value.length > 17) {
+                        value = value.substring(0, 17);
+                    }
+                    
+                    this.formData.mac = value;
+                    this.clearFieldError('mac');
+                },
+                
                 async discoverMac() {
-                    if (!this.formData.ip || this.discoveringMac) return;
+                    if (!this.isValidIP || this.discoveringMac) return;
                     
                     this.discoveringMac = true;
+                    this.macDiscoveryAttempted = true;
                     
-                    try {
-                        const response = await fetch(`/discover_mac?ip=${encodeURIComponent(this.formData.ip)}`);
-                        const data = await response.json();
-                        
-                        if (data.success && data.mac) {
-                            this.formData.mac = data.mac;
+                    const result = await LumenTrace.APIUtils.get(`/discover_mac?ip=${encodeURIComponent(this.formData.ip)}`);
+                    
+                    if (result.success) {
+                        if (result.data.success && result.data.mac) {
+                            this.formData.mac = LumenTrace.Utils.normalizeMac(result.data.mac);
                             this.showToast('MAC address discovered successfully!', 'success');
+                            this.validateField('mac');
                         } else {
                             this.showToast('Could not discover MAC address. You can enter it manually.', 'warning');
                         }
+                    }
+                    
+                    this.discoveringMac = false;
+                },
+                
+                async submitForm() {
+                    if (this.isSubmitting || !this.isFormValid()) return;
+                    
+                    this.validationErrors = {};
+                    Object.keys(this.validationRules).forEach(field => {
+                        this.validateField(field);
+                    });
+                    
+                    if (Object.keys(this.validationErrors).length > 0) {
+                        this.showToast('Please fix the validation errors', 'error');
+                        return;
+                    }
+                    
+                    this.isSubmitting = true;
+                    this.loading = true;
+                    
+                    if (!this.formData.mac && this.isValidIP) {
+                        this.loadingMessage = 'Discovering MAC address...';
+                        await this.discoverMac();
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                    
+                    this.loadingMessage = 'Adding device...';
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('name', this.formData.name.trim());
+                        formData.append('ip', this.formData.ip.trim());
+                        formData.append('mac', LumenTrace.Utils.normalizeMac(this.formData.mac) || '');
+                        
+                        const response = await fetch('{{ url_for("devices.add_device") }}', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: formData
+                        });
+                        
+                        if (response.redirected) {
+                            this.loading = false;
+                            this.showSuccess = true;
+                            
+                            setTimeout(() => {
+                                window.location.href = response.url;
+                            }, 1500);
+                        } else if (!response.ok) {
+                            throw new Error('Failed to add device');
+                        }
+                        
                     } catch (error) {
-                        this.showToast('Failed to discover MAC address', 'error');
-                    } finally {
-                        this.discoveringMac = false;
+                        console.error('Form submission error:', error);
+                        this.showToast('Failed to add device. Please check if the IP or MAC already exists.', 'error');
+                        this.loading = false;
+                        this.isSubmitting = false;
                     }
                 },
                 
-                // Toast system
                 showToast(message, type = 'info') {
-                    const id = Date.now();
-                    const toast = { id, message, type, visible: true };
-                    this.toasts.push(toast);
-                    
-                    // Auto remove after 5 seconds
-                    setTimeout(() => {
-                        this.removeToast(id);
-                    }, 5000);
+                    return LumenTrace.ToastManager.show(message, type);
                 },
                 
                 removeToast(id) {
-                    const index = this.toasts.findIndex(t => t.id === id);
-                    if (index > -1) {
-                        this.toasts[index].visible = false;
-                        setTimeout(() => {
-                            this.toasts.splice(index, 1);
-                        }, 200);
-                    }
+                    LumenTrace.ToastManager.remove(id);
                 }
             };
         }

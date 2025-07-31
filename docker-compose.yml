@@ -2,33 +2,17 @@ services:
   lumentrace:
     image: pwsmith1988/lumentrace:latest
     container_name: lumentrace
-    network_mode: host
     restart: unless-stopped
+    environment:
+      - TZ=America/New_York  # Replace with your timezone
     cap_add:
       - NET_RAW
-      - NET_BROADCAST
       - NET_ADMIN
+      - NET_BROADCAST
+    network_mode: host
     volumes:
-      - lumentrace_data_volume:/data
+      - ./data:/data
     env_file: .env
 
-  redis:
-    image: redis:7-alpine
-    container_name: lumentrace_redis
-    networks:
-      - lumentrace_network
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-
 volumes:
-  lumentrace_data_volume:
-    driver: local
-  redis_data:
-    driver: local
-
-networks:
-  lumentrace_network:
-    driver: bridge
+  lumentrace-data:

@@ -6,6 +6,5 @@ python-dotenv==1.0.0
 Flask-Limiter==3.5.0
 python-json-logger==2.0.7
 waitress==2.1.2
-redis==5.0.1
 flask-wtf==1.2.2
 WTForms==3.0.0

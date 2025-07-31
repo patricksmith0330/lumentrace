@@ -3,43 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Settings - LumenTrace</title>
     <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/custom-vars.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/light-theme.css') }}" rel="stylesheet">
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        .transition-height {
+            transition: height 0.3s ease-in-out;
+        }
+        
+        .edit-mode-enter {
+            animation: editModeEnter 0.2s ease-out;
+        }
+        
+        @keyframes editModeEnter {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}" 
+<body class="bg-slate-950 text-gray-300 {{ settings.density if settings.density else 'comfortable' }} {% if settings.theme == 'light' %}light-theme{% endif %}" 
       x-data="settingsApp()" 
-      x-init="init()">
+      x-init="safeInit()"
+      @keydown.escape="handleEscape">
     
-    <!-- Toast Container -->
     <div id="toast-container" 
-         class="fixed top-4 right-4 z-50 space-y-2" 
+         class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none" 
          x-show="toasts.length > 0"
-         x-transition>
+         x-transition
+         role="region"
+         aria-label="Notifications"
+         aria-live="polite">
         <template x-for="toast in toasts" :key="toast.id">
-            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white"
-                 :class="toast.type === 'success' ? 'bg-green-600' : 
-                         toast.type === 'error' ? 'bg-red-600' : 
-                         toast.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'"
+            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white pointer-events-auto"
+                 :class="{
+                     'bg-green-600': toast.type === 'success',
+                     'bg-red-600': toast.type === 'error',
+                     'bg-yellow-600': toast.type === 'warning',
+                     'bg-blue-600': toast.type === 'info'
+                 }"
                  x-show="toast.visible"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform translate-x-full"
                  x-transition:enter-end="opacity-100 transform translate-x-0"
                  x-transition:leave="transition ease-in duration-200"
                  x-transition:leave-start="opacity-100 transform translate-x-0"
-                 x-transition:leave-end="opacity-0 transform translate-x-full">
+                 x-transition:leave-end="opacity-0 transform translate-x-full"
+                 role="alert">
+                
+                <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path x-show="toast.type === 'success'" fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'error'" fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'warning'" fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'info'" fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
                 
                 <div class="flex-1">
                     <p class="text-sm font-medium" x-text="toast.message"></p>
                 </div>
                 
-                <button @click="removeToast(toast.id)" class="flex-shrink-0 text-white/70 hover:text-white transition-colors">
+                <button @click="removeToast(toast.id)" 
+                        class="flex-shrink-0 text-white/70 hover:text-white transition-colors focus-visible"
+                        aria-label="Dismiss notification">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                     </svg>
@@ -48,7 +98,6 @@
         </template>
     </div>
 
-    <!-- Loading Overlay -->
     <div x-show="loading" 
          x-transition:enter="transition-opacity ease-linear duration-300"
          x-transition:enter-start="opacity-0"
@@ -56,30 +105,31 @@
          x-transition:leave="transition-opacity ease-linear duration-300"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center">
+         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center"
+         role="status"
+         aria-live="polite">
         <div class="bg-slate-900 rounded-lg p-6 flex items-center space-x-3">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span class="text-white font-medium">Saving...</span>
+            <div class="loading-spinner rounded-full h-8 w-8 border-b-2 border-blue-500" aria-hidden="true"></div>
+            <span class="text-white font-medium" x-text="loadingMessage">Saving...</span>
         </div>
     </div>
 
     <div class="flex h-screen">
-        <!-- Desktop Sidebar -->
-        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col">
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col" role="navigation">
             <div class="flex flex-col items-center justify-center p-6 space-y-2">
                 <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto" />
                 <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
             </div>
             
-            <nav class="mt-10 px-6 space-y-2">
-                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
-                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+            <nav class="mt-10 px-6 space-y-2" aria-label="Main navigation">
+                <a href="{{ url_for('dashboard.dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
+                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                     </svg>
                     Dashboard
                 </a>
-                <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors">
-                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <a href="{{ url_for('settings.settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors focus-visible" aria-current="page">
+                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
@@ -88,11 +138,13 @@
             </nav>
         </aside>
 
-        <!-- Main Content -->
         <div class="flex-1 flex flex-col overflow-hidden">
-            <!-- Mobile Header -->
             <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950 border-b border-slate-800">
-                <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                <button @click="toggleMobileSidebar" 
+                        class="text-gray-400 hover:text-white p-2 rounded-md transition-colors focus-visible"
+                        aria-label="Toggle mobile navigation"
+                        aria-expanded="false"
+                        aria-controls="mobile-sidebar">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
@@ -101,10 +153,14 @@
                 <div class="w-10"></div>
             </header>
             
-            <!-- Mobile Sidebar -->
-            <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform -translate-x-full transition-transform duration-300 ease-in-out lg:hidden">
+            <aside id="mobile-sidebar" 
+                   class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform transition-transform duration-300 ease-in-out lg:hidden"
+                   :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
+                   role="navigation">
                 <div class="absolute top-0 right-0 p-4">
-                    <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
+                    <button @click="toggleMobileSidebar" 
+                            class="text-gray-400 hover:text-white p-2 rounded-md transition-colors focus-visible"
+                            aria-label="Close mobile navigation">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
@@ -116,14 +172,14 @@
                     <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
                 </div>
                 
-                <nav class="mt-10 px-6 space-y-2">
-                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+                <nav class="mt-10 px-6 space-y-2" aria-label="Mobile navigation">
+                    <a href="{{ url_for('dashboard.dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
                         <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                         </svg>
                         Dashboard
                     </a>
-                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors">
+                    <a href="{{ url_for('settings.settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors focus-visible" aria-current="page">
                         <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -133,16 +189,24 @@
                 </nav>
             </aside>
 
-            <!-- Main Content Area -->
-            <main class="flex-1 overflow-y-auto">
+            <div x-show="mobileMenuOpen" 
+                 @click="toggleMobileSidebar"
+                 class="fixed inset-0 z-30 bg-black bg-opacity-50 lg:hidden"
+                 x-transition:enter="transition-opacity ease-linear duration-300"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition-opacity ease-linear duration-300"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 aria-hidden="true"></div>
+
+            <main class="flex-1 overflow-y-auto" role="main">
                 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                    <!-- Header -->
                     <header class="mb-8">
                         <h1 class="text-3xl font-bold text-gray-200">Application Settings</h1>
                         <p class="text-gray-400 mt-1">Configure general, network, and UPS monitoring options.</p>
                     </header>
 
-                    <!-- Flash Messages (converted to toasts on page load) -->
                     {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
                             <div style="display: none;" id="flash-messages">
@@ -153,133 +217,160 @@
                         {% endif %}
                     {% endwith %}
 
-                    <!-- UPS Systems Section -->
-                    <div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors mb-8">
-                        <h2 class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">
+                    <section class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors mb-8" aria-labelledby="ups-section-title">
+                        <h2 id="ups-section-title" class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">
                             UPS Systems
                             <span class="text-sm font-normal text-gray-400 ml-3">
                                 <span x-text="upsSystems.length"></span> configured
                             </span>
                         </h2>
 
-                        <!-- UPS List -->
                         <div x-show="upsSystems.length > 0" class="mb-8">
                             <div class="overflow-x-auto rounded-lg border border-slate-700">
-                                <table class="w-full text-left bg-slate-800/50">
+                                <table class="w-full text-left bg-slate-800/50" role="table">
                                     <thead class="border-b border-slate-700 bg-slate-800">
-                                        <tr>
-                                            <th class="p-4 font-semibold text-sm text-gray-400">UPS Name</th>
-                                            <th class="p-4 font-semibold text-sm text-gray-400">IP Address</th>
-                                            <th class="p-4 font-semibold text-sm text-gray-400">Port</th>
-                                            <th class="p-4 font-semibold text-sm text-center text-gray-400">Status</th>
-                                            <th class="p-4 font-semibold text-sm text-center text-gray-400">Actions</th>
+                                        <tr role="row">
+                                            <th class="p-4 font-semibold text-sm text-gray-400" role="columnheader">UPS Name</th>
+                                            <th class="p-4 font-semibold text-sm text-gray-400" role="columnheader">NUT IP Address</th>
+                                            <th class="p-4 font-semibold text-sm text-gray-400" role="columnheader">Port</th>
+                                            <th class="p-4 font-semibold text-sm text-center text-gray-400" role="columnheader">Status</th>
+                                            <th class="p-4 font-semibold text-sm text-center text-gray-400" role="columnheader">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody role="rowgroup">
                                         <template x-for="ups in upsSystems" :key="ups.id">
-                                            <tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-800/30 transition-colors">
-                                                <!-- View Mode -->
+                                            <tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-800/30 transition-colors" role="row">
                                                 <template x-if="editingUpsId !== ups.id">
-                                                    <td class="p-4">
+                                                    <td class="p-4" role="gridcell">
                                                         <div class="font-semibold text-white" x-text="ups.name"></div>
                                                     </td>
                                                 </template>
                                                 <template x-if="editingUpsId !== ups.id">
-                                                    <td class="p-4">
+                                                    <td class="p-4" role="gridcell">
                                                         <code class="font-mono text-sm text-gray-400" x-text="ups.ip"></code>
                                                     </td>
                                                 </template>
                                                 <template x-if="editingUpsId !== ups.id">
-                                                    <td class="p-4">
+                                                    <td class="p-4" role="gridcell">
                                                         <code class="font-mono text-sm text-gray-400" x-text="ups.port"></code>
                                                     </td>
                                                 </template>
                                                 
-                                                <!-- Edit Mode -->
                                                 <template x-if="editingUpsId === ups.id">
-                                                    <td class="p-4">
-                                                        <input type="text" 
-                                                               x-model="editingUps.name"
-                                                               class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
-                                                               placeholder="UPS Name"
-                                                               :class="editValidationErrors.name ? 'border-red-500 focus:border-red-500' : ''">
-                                                        <p x-show="editValidationErrors.name" class="mt-1 text-sm text-red-400" x-text="editValidationErrors.name"></p>
+                                                    <td class="p-4" role="gridcell">
+                                                        <div class="edit-mode-enter">
+                                                            <input type="text" 
+                                                                   x-model="editingUps.name"
+                                                                   @keydown.enter="saveEditUps(ups.id)"
+                                                                   @keydown.escape="cancelEditUps"
+                                                                   class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+                                                                   placeholder="UPS Name"
+                                                                   :class="editValidationErrors.name ? 'border-red-500 focus:border-red-500' : ''"
+                                                                   :aria-describedby="editValidationErrors.name ? 'edit-name-error' : null">
+                                                            <p x-show="editValidationErrors.name" id="edit-name-error" class="mt-1 text-sm text-red-400" x-text="editValidationErrors.name" role="alert"></p>
+                                                        </div>
                                                     </td>
                                                 </template>
                                                 <template x-if="editingUpsId === ups.id">
-                                                    <td class="p-4">
-                                                        <input type="text" 
-                                                               x-model="editingUps.ip"
-                                                               class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-mono"
-                                                               placeholder="192.168.1.10"
-                                                               pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-                                                               :class="editValidationErrors.ip ? 'border-red-500 focus:border-red-500' : ''">
-                                                        <p x-show="editValidationErrors.ip" class="mt-1 text-sm text-red-400" x-text="editValidationErrors.ip"></p>
+                                                    <td class="p-4" role="gridcell">
+                                                        <div class="edit-mode-enter">
+                                                            <input type="text" 
+                                                                   x-model="editingUps.ip"
+                                                                   @keydown.enter="saveEditUps(ups.id)"
+                                                                   @keydown.escape="cancelEditUps"
+                                                                   class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-mono"
+                                                                   placeholder="192.168.1.10"
+                                                                   pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+                                                                   :class="editValidationErrors.ip ? 'border-red-500 focus:border-red-500' : ''"
+                                                                   :aria-describedby="editValidationErrors.ip ? 'edit-ip-error' : null">
+                                                            <p x-show="editValidationErrors.ip" id="edit-ip-error" class="mt-1 text-sm text-red-400" x-text="editValidationErrors.ip" role="alert"></p>
+                                                        </div>
                                                     </td>
                                                 </template>
                                                 <template x-if="editingUpsId === ups.id">
-                                                    <td class="p-4">
-                                                        <input type="number" 
-                                                               x-model="editingUps.port"
-                                                               min="1" 
-                                                               max="65535"
-                                                               class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
-                                                               placeholder="3493"
-                                                               :class="editValidationErrors.port ? 'border-red-500 focus:border-red-500' : ''">
-                                                        <p x-show="editValidationErrors.port" class="mt-1 text-sm text-red-400" x-text="editValidationErrors.port"></p>
+                                                    <td class="p-4" role="gridcell">
+                                                        <div class="edit-mode-enter">
+                                                            <input type="number" 
+                                                                   x-model.number="editingUps.port"
+                                                                   @keydown.enter="saveEditUps(ups.id)"
+                                                                   @keydown.escape="cancelEditUps"
+                                                                   min="1" 
+                                                                   max="65535"
+                                                                   class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all"
+                                                                   placeholder="3493"
+                                                                   :class="editValidationErrors.port ? 'border-red-500 focus:border-red-500' : ''"
+                                                                   :aria-describedby="editValidationErrors.port ? 'edit-port-error' : null">
+                                                            <p x-show="editValidationErrors.port" id="edit-port-error" class="mt-1 text-sm text-red-400" x-text="editValidationErrors.port" role="alert"></p>
+                                                        </div>
                                                     </td>
                                                 </template>
                                                 
-                                                <!-- Status (same for both modes) -->
-                                                <td class="p-4 text-center">
+                                                <td class="p-4 text-center" role="gridcell">
                                                     <span class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full"
-                                                          :class="getUpsStatus(ups.id) === 'connected' ? 'bg-green-500/20 text-green-300' : 
-                                                                  getUpsStatus(ups.id) === 'failed' ? 'bg-red-500/20 text-red-300' : 
-                                                                  'bg-gray-500/20 text-gray-400'">
+                                                          :class="{
+                                                              'bg-green-500/20 text-green-300': getUpsStatus(ups.id) === 'connected',
+                                                              'bg-red-500/20 text-red-300': getUpsStatus(ups.id) === 'failed',
+                                                              'bg-gray-500/20 text-gray-400': getUpsStatus(ups.id) === 'unknown',
+                                                              'bg-yellow-500/20 text-yellow-300': getUpsStatus(ups.id) === 'testing'
+                                                          }"
+                                                          role="status"
+                                                          :aria-label="`UPS ${ups.name} status: ${getUpsStatus(ups.id)}`">
                                                         <span class="w-1.5 h-1.5 rounded-full mr-1.5"
-                                                              :class="getUpsStatus(ups.id) === 'connected' ? 'bg-green-500' : 
-                                                                     getUpsStatus(ups.id) === 'failed' ? 'bg-red-500' : 
-                                                                     'bg-gray-500'"></span>
-                                                        <span x-text="getUpsStatus(ups.id) === 'connected' ? 'Connected' : 
-                                                                     getUpsStatus(ups.id) === 'failed' ? 'Failed' : 
-                                                                     'Unknown'"></span>
+                                                              :class="{
+                                                                  'bg-green-500': getUpsStatus(ups.id) === 'connected',
+                                                                  'bg-red-500': getUpsStatus(ups.id) === 'failed',
+                                                                  'bg-gray-500': getUpsStatus(ups.id) === 'unknown',
+                                                                  'bg-yellow-500 animate-pulse': getUpsStatus(ups.id) === 'testing'
+                                                              }"></span>
+                                                        <span x-text="{
+                                                            'connected': 'Connected',
+                                                            'failed': 'Failed',
+                                                            'unknown': 'Unknown',
+                                                            'testing': 'Testing...'
+                                                        }[getUpsStatus(ups.id)] || 'Unknown'"></span>
                                                     </span>
                                                 </td>
                                                 
-                                                <!-- Actions -->
-                                                <td class="p-4 text-center">
+                                                <td class="p-4 text-center" role="gridcell">
                                                     <div class="flex items-center justify-center space-x-2">
-                                                        <!-- View Mode Actions -->
                                                         <template x-if="editingUpsId !== ups.id">
                                                             <button @click="testUpsConnection(ups.id)" 
-                                                                    :disabled="loading"
-                                                                    class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                                                Test
+                                                                    :disabled="loading || testingUps[ups.id]"
+                                                                    class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible"
+                                                                    :aria-label="`Test connection for ${ups.name}`">
+                                                                <span x-show="!testingUps[ups.id]">Test</span>
+                                                                <span x-show="testingUps[ups.id]">Testing...</span>
                                                             </button>
                                                         </template>
                                                         <template x-if="editingUpsId !== ups.id">
                                                             <button @click="startEditUps(ups.id)" 
-                                                                    class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors">
+                                                                    class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible"
+                                                                    :aria-label="`Edit ${ups.name}`">
                                                                 Edit
                                                             </button>
                                                         </template>
                                                         <template x-if="editingUpsId !== ups.id">
                                                             <button @click="removeUps(ups.id, ups.name)" 
-                                                                    class="px-3 py-1 rounded-md text-sm border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors">
-                                                                Remove
+                                                                    :disabled="removingUps[ups.id]"
+                                                                    class="px-3 py-1 rounded-md text-sm border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible"
+                                                                    :aria-label="`Remove ${ups.name}`">
+                                                                <span x-show="!removingUps[ups.id]">Remove</span>
+                                                                <span x-show="removingUps[ups.id]">Removing...</span>
                                                             </button>
                                                         </template>
                                                         
-                                                        <!-- Edit Mode Actions -->
                                                         <template x-if="editingUpsId === ups.id">
                                                             <button @click="saveEditUps(ups.id)" 
-                                                                    class="px-3 py-1 rounded-md text-sm bg-green-600 text-white hover:bg-green-700 transition-colors">
+                                                                    :disabled="loading"
+                                                                    class="px-3 py-1 rounded-md text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible"
+                                                                    :aria-label="'Save changes'">
                                                                 Save
                                                             </button>
                                                         </template>
                                                         <template x-if="editingUpsId === ups.id">
                                                             <button @click="cancelEditUps()" 
-                                                                    class="px-3 py-1 rounded-md text-sm border border-gray-500/50 text-gray-400 hover:bg-gray-500/10 transition-colors">
+                                                                    class="px-3 py-1 rounded-md text-sm border border-gray-500/50 text-gray-400 hover:bg-gray-500/10 transition-colors focus-visible"
+                                                                    :aria-label="'Cancel editing'">
                                                                 Cancel
                                                             </button>
                                                         </template>
@@ -292,22 +383,17 @@
                             </div>
                         </div>
 
-                        <!-- No UPS Systems Message -->
                         <div x-show="upsSystems.length === 0" class="text-center py-8 mb-8">
-                            <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                             </svg>
                             <p class="text-gray-500 mb-4">No UPS systems configured yet</p>
                             <p class="text-sm text-gray-600">Add your first UPS below to start monitoring power status</p>
                         </div>
 
-                        <!-- Add New UPS -->
                         <div class="border-t border-slate-700 pt-6">
                             <h3 class="text-xl font-semibold text-gray-200 mb-5">Add New UPS</h3>
                             <form @submit.prevent="submitUpsForm" class="space-y-6">
-                                <!-- CSRF Token -->
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div>
                                         <label for="ups_name" class="block text-sm font-medium text-gray-300 mb-2">
@@ -320,13 +406,14 @@
                                                required 
                                                class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                                                placeholder="e.g., Main UPS"
-                                               :class="validationErrors.name ? 'border-red-500 focus:border-red-500' : ''">
-                                        <p x-show="validationErrors.name" class="mt-1 text-sm text-red-400" x-text="validationErrors.name"></p>
+                                               :class="validationErrors.name ? 'border-red-500 focus:border-red-500' : ''"
+                                               :aria-describedby="validationErrors.name ? 'ups-name-error' : null">
+                                        <p x-show="validationErrors.name" id="ups-name-error" class="mt-1 text-sm text-red-400" x-text="validationErrors.name" role="alert"></p>
                                     </div>
                                     
                                     <div>
                                         <label for="ups_ip" class="block text-sm font-medium text-gray-300 mb-2">
-                                            IP Address
+                                            NUT Server IP
                                             <span class="text-red-400">*</span>
                                         </label>
                                         <input type="text" 
@@ -336,8 +423,9 @@
                                                class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
                                                placeholder="192.168.1.10"
                                                pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
-                                               :class="validationErrors.ip ? 'border-red-500 focus:border-red-500' : ''">
-                                        <p x-show="validationErrors.ip" class="mt-1 text-sm text-red-400" x-text="validationErrors.ip"></p>
+                                               :class="validationErrors.ip ? 'border-red-500 focus:border-red-500' : ''"
+                                               :aria-describedby="validationErrors.ip ? 'ups-ip-error' : null">
+                                        <p x-show="validationErrors.ip" id="ups-ip-error" class="mt-1 text-sm text-red-400" x-text="validationErrors.ip" role="alert"></p>
                                     </div>
                                     
                                     <div>
@@ -347,41 +435,37 @@
                                         </label>
                                         <input type="number" 
                                                id="ups_port" 
-                                               x-model="newUps.port"
+                                               x-model.number="newUps.port"
                                                required 
                                                min="1" 
                                                max="65535"
                                                class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                               :class="validationErrors.port ? 'border-red-500 focus:border-red-500' : ''">
-                                        <p x-show="validationErrors.port" class="mt-1 text-sm text-red-400" x-text="validationErrors.port"></p>
+                                               :class="validationErrors.port ? 'border-red-500 focus:border-red-500' : ''"
+                                               :aria-describedby="validationErrors.port ? 'ups-port-error' : null">
+                                        <p x-show="validationErrors.port" id="ups-port-error" class="mt-1 text-sm text-red-400" x-text="validationErrors.port" role="alert"></p>
                                         <p class="mt-1 text-sm text-gray-500">Default NUT port is 3493</p>
                                     </div>
                                 </div>
                                 
                                 <div class="flex justify-end">
                                     <button type="submit" 
-                                            :disabled="loading"
-                                            class="flex items-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                            :disabled="loading || isAddingUps || !isValidUpsForm()"
+                                            class="flex items-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all focus-visible">
                                         <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                         </svg>
-                                        <span x-text="loading ? 'Adding...' : 'Add UPS'"></span>
+                                        <span x-text="loading || isAddingUps ? 'Adding...' : 'Add UPS'"></span>
                                     </button>
                                 </div>
                             </form>
                         </div>
-                    </div>
+                    </section>
 
-                    <!-- General Settings -->
-                    <form @submit.prevent="submitGeneralSettings">
-                        <!-- CSRF Token -->
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        
-                        <div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
+                    <section class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors" aria-labelledby="general-section-title">
+                        <form @submit.prevent="submitGeneralSettings">
                             <div class="space-y-8">
-                                <!-- General Section -->
                                 <fieldset>
-                                    <legend class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">General Settings</legend>
+                                    <legend id="general-section-title" class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">General Settings</legend>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label for="refresh_interval" class="block text-sm font-medium text-gray-300 mb-2">
@@ -390,7 +474,7 @@
                                             </label>
                                             <input type="number" 
                                                    id="refresh_interval" 
-                                                   x-model="generalSettings.refresh_interval"
+                                                   x-model.number="generalSettings.refresh_interval"
                                                    required 
                                                    min="5"
                                                    max="300"
@@ -405,12 +489,12 @@
                                             </label>
                                             <input type="number" 
                                                    id="log_retention" 
-                                                   x-model="generalSettings.log_retention"
+                                                   x-model.number="generalSettings.log_retention"
                                                    required 
                                                    min="10"
                                                    max="1000"
                                                    class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all">
-                                            <p class="mt-1 text-sm text-gray-500">Maximum number of log entries to keep</p>
+                                            <p class="mt-1 text-sm text-gray-500">Maximum number of log entries to keep (10-1000)</p>
                                         </div>
                                         
                                         <div>
@@ -420,7 +504,7 @@
                                             </label>
                                             <input type="number" 
                                                    id="wol_battery_threshold" 
-                                                   x-model="generalSettings.wol_battery_threshold"
+                                                   x-model.number="generalSettings.wol_battery_threshold"
                                                    required 
                                                    min="0" 
                                                    max="100"
@@ -438,10 +522,37 @@
                                             </select>
                                             <p class="mt-1 text-sm text-gray-500">Log routine events like periodic status checks</p>
                                         </div>
+
+                                        <div>
+                                            <label for="theme" class="block text-sm font-medium text-gray-300 mb-2">
+                                                Theme
+                                            </label>
+                                            <select id="theme" 
+                                                    x-model="generalSettings.theme"
+                                                    @change="onThemeChange"
+                                                    class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all">
+                                                <option value="dark">Dark</option>
+                                                <option value="light">Light</option>
+                                            </select>
+                                            <p class="mt-1 text-sm text-gray-500">Choose between dark and light theme</p>
+                                        </div>
+                                        
+                                        <div>
+                                            <label for="density" class="block text-sm font-medium text-gray-300 mb-2">
+                                                UI Density
+                                            </label>
+                                            <select id="density" 
+                                                    x-model="generalSettings.density"
+                                                    class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all">
+                                                <option value="compact">Compact</option>
+                                                <option value="comfortable">Comfortable</option>
+                                                <option value="spacious">Spacious</option>
+                                            </select>
+                                            <p class="mt-1 text-sm text-gray-500">Adjust spacing and padding throughout the UI</p>
+                                        </div>
                                     </div>
                                 </fieldset>
 
-                                <!-- Network Discovery Section -->
                                 <fieldset>
                                     <legend class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">Network Discovery</legend>
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -456,8 +567,10 @@
                                                    required 
                                                    class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
                                                    placeholder="192.168.1.0/24"
-                                                   pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/(?:[0-9]|[1-2][0-9]|3[0-2]))?$">
+                                                   pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/(?:[0-9]|[1-2][0-9]|3[0-2]))?$"
+                                                   :class="!isValidCIDR(generalSettings.ip_scan_range) && generalSettings.ip_scan_range ? 'border-red-500' : ''">
                                             <p class="mt-1 text-sm text-gray-500">Network range for device discovery (e.g., 192.168.1.0/24)</p>
+                                            <p x-show="!isValidCIDR(generalSettings.ip_scan_range) && generalSettings.ip_scan_range" class="mt-1 text-sm text-red-400">Invalid CIDR format</p>
                                         </div>
                                         
                                         <div>
@@ -467,177 +580,187 @@
                                             </label>
                                             <input type="number" 
                                                    id="discovery_timeout" 
-                                                   x-model="generalSettings.discovery_timeout"
+                                                   x-model.number="generalSettings.discovery_timeout"
                                                    required 
                                                    min="1"
                                                    max="30"
                                                    class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all">
-                                            <p class="mt-1 text-sm text-gray-500">How long to wait for device responses during discovery</p>
+                                            <p class="mt-1 text-sm text-gray-500">How long to wait for device responses during discovery (1-30 seconds)</p>
                                         </div>
                                     </div>
                                 </fieldset>
 
-                                <!-- Save Button -->
                                 <div class="pt-6 border-t border-slate-700">
-                                    <div class="flex justify-end">
+                                    <div class="flex items-center justify-between">
+                                        <p x-show="hasSettingsChanges()" class="text-sm text-yellow-400">
+                                            <svg class="w-4 h-4 inline mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                            </svg>
+                                            You have unsaved changes
+                                        </p>
                                         <button type="submit" 
-                                                :disabled="loading"
-                                                class="flex items-center px-8 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                                                :disabled="loading || isSavingSettings || !isValidSettingsForm()"
+                                                class="flex items-center px-8 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all focus-visible">
                                             <svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <span x-text="loading ? 'Saving...' : 'Save Settings'"></span>
+                                            <span x-text="loading || isSavingSettings ? 'Saving...' : 'Save Settings'"></span>
                                         </button>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </form>
+                        </form>
+                    </section>
                 </div>
             </main>
         </div>
     </div>
 
-    <!-- Mobile JavaScript -->
-    <script>
-    function toggleMobileSidebar() {
-        const sidebar = document.getElementById('mobile-sidebar');
-        sidebar.classList.toggle('-translate-x-full');
-    }
-    </script>
-
     <script>
         function settingsApp() {
             return {
-                // State
+                // State management
                 loading: false,
+                loadingMessage: 'Loading...',
+                isAddingUps: false,
+                isSavingSettings: false,
                 toasts: [],
+                mobileMenuOpen: false,
                 
-                // UPS Systems with unique IDs - Use safe filter for JSON injection
-                upsSystems: {{ settings.ups_configs | tojson | safe }}.map(ups => ({
-                    ...ups,
-                    id: ups.id || ups.name + '_' + ups.ip // Ensure each UPS has a unique ID
-                })),
-                
-                // UPS connection status tracking (by ID instead of index)
+                // UPS management
+                upsSystems: [],
                 upsStatuses: {},
+                testingUps: {},
+                removingUps: {},
                 
-                // Editing state - Use ID instead of index
                 editingUpsId: null,
                 editingUps: {},
                 editValidationErrors: {},
                 
-                // New UPS form
                 newUps: {
                     name: '',
                     ip: '',
                     port: 3493
                 },
                 
-                // General settings
+                // Settings
                 generalSettings: {
                     refresh_interval: {{ settings.refresh_interval }},
                     log_retention: {{ settings.log_retention }},
                     ip_scan_range: '{{ settings.ip_scan_range }}',
                     discovery_timeout: {{ settings.discovery_timeout }},
                     wol_battery_threshold: {{ settings.wol_battery_threshold }},
-                    verbose_logging: '{{ settings.verbose_logging | string | lower }}'
+                    verbose_logging: '{{ settings.verbose_logging | string | lower }}',
+                    theme: '{{ settings.theme if settings.theme else "dark" }}',
+                    density: '{{ settings.density if settings.density else "comfortable" }}'
                 },
+                
+                // Original settings for change detection
+                originalSettings: null,
                 
                 // Validation
                 validationErrors: {},
-                
-                // CSRF Token
-                csrfToken: '{{ csrf_token() }}',
+                validationRules: {
+                    ups: {
+                        name: {
+                            required: true,
+                            requiredMessage: 'UPS name is required',
+                            min: 1,
+                            max: 100,
+                            maxMessage: 'UPS name must be no more than 100 characters',
+                             custom: function(value, data) {
+                                return null;
+                            }
+                        },       
+
+                        ip: {
+                            required: true,
+                            requiredMessage: 'IP address is required',
+                            pattern: LumenTrace.CONSTANTS.VALIDATION.IP_PATTERN,
+                            patternMessage: 'Please enter a valid IP address'
+                        },
+                        port: {
+                            required: true,
+                            requiredMessage: 'Port is required',
+                            custom: (value) => {
+                                const port = parseInt(value);
+                                if (!port || port < 1 || port > 65535) {
+                                    return 'Port must be between 1 and 65535';
+                                }
+                                return null;
+                            }
+                        }
+                    }
+                },
                 
                 // Initialization
+                safeInit() {
+                    try {
+                        this.init();
+                    } catch (error) {
+                        console.error('Settings initialization failed:', error);
+                        this.showToast('Initialization failed', 'error');
+                    }
+                },
+                
                 init() {
-                    this.processFlashMessages();
+                    // Set toast manager reference
+                    LumenTrace.ToastManager.setAlpineComponent(this);
+                    
+                    // Initialize theme
+                    LumenTrace.ThemeManager.init(this.generalSettings.theme);
+                    
+                    // Store original settings
+                    this.originalSettings = JSON.parse(JSON.stringify(this.generalSettings));
+
+                    // Set up the custom validation function with proper context
+                    this.validationRules.ups.name.custom = (value, data) => {
+                        const normalizedValue = value.trim().toLowerCase();
+                        const exists = this.upsSystems.some(ups => 
+                            ups.id !== this.editingUpsId && 
+                            ups.name.toLowerCase() === normalizedValue
+                        );
+                        return exists ? 'UPS name already exists' : null;
+                    };
+                    
+                    // Process UPS systems
+                    const upsConfigs = {{ settings.ups_configs | tojson | safe }};
+                    this.upsSystems = Array.isArray(upsConfigs) ? upsConfigs.map(ups => ({
+                        ...ups,
+                        id: ups.id || LumenTrace.Utils.generateId()
+                    })) : [];
+                    
+                    // Initialize UPS statuses
                     this.initializeUpsStatuses();
+                    
+                    // Process flash messages
+                    this.processFlashMessages();
+                    
                     // Check UPS statuses after a short delay
                     setTimeout(() => {
                         this.checkAllUpsStatuses();
                     }, 1000);
-                },
-                
-                // Initialize UPS status tracking by ID
-                initializeUpsStatuses() {
-                    this.upsSystems.forEach((ups) => {
-                        this.upsStatuses[ups.id] = null; // null = unknown, 'connected' = connected, 'failed' = failed
+                    
+                    // Focus first input
+                    this.$nextTick(() => {
+                        const firstInput = document.querySelector('input:not([type="hidden"])');
+                        if (firstInput) firstInput.focus();
                     });
                 },
                 
-                // Get UPS status by ID
+                initializeUpsStatuses() {
+                    this.upsSystems.forEach((ups) => {
+                        this.upsStatuses[ups.id] = 'unknown';
+                        this.testingUps[ups.id] = false;
+                        this.removingUps[ups.id] = false;
+                    });
+                },
+                
                 getUpsStatus(upsId) {
                     return this.upsStatuses[upsId] || 'unknown';
                 },
                 
-                // Test UPS connection using simplified approach
-                async testUpsConnection(upsId) {
-                    const ups = this.upsSystems.find(u => u.id === upsId);
-                    if (!ups) return;
-                    
-                    this.loading = true;
-                    
-                    try {
-                        // Use a dedicated test endpoint
-                        const response = await fetch('/api/ups/test', {
-                            method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': this.csrfToken
-                            },
-                            body: JSON.stringify({
-                                id: ups.id,
-                                name: ups.name,
-                                ip: ups.ip,
-                                port: ups.port
-                            })
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            this.upsStatuses[upsId] = data.success ? 'connected' : 'failed';
-                            this.showToast(
-                                data.success ? 
-                                `${ups.name} is connected and responding!` : 
-                                `${ups.name} connection failed: ${data.message || 'Unknown error'}`,
-                                data.success ? 'success' : 'error'
-                            );
-                        } else {
-                            throw new Error(`HTTP ${response.status}`);
-                        }
-                    } catch (error) {
-                        this.upsStatuses[upsId] = 'failed';
-                        this.showToast(`Cannot test ${ups.name}: ${error.message}`, 'error');
-                    } finally {
-                        this.loading = false;
-                    }
-                },
-                
-                // Check all UPS statuses using existing endpoint
-                async checkAllUpsStatuses() {
-                    try {
-                        const response = await fetch('/get_ups_status');
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            
-                            // Update status for each configured UPS
-                            this.upsSystems.forEach((ups) => {
-                                const upsFound = data.ups_systems && data.ups_systems.find(u => 
-                                    u.name === ups.name || u.ip === ups.ip
-                                );
-                                this.upsStatuses[ups.id] = upsFound ? 'connected' : 'failed';
-                            });
-                        }
-                    } catch (error) {
-                        console.warn('Could not check UPS statuses:', error);
-                        // Keep all as unknown
-                    }
-                },
-                
-                // Process Flask flash messages into toasts
+                // Flash message processing
                 processFlashMessages() {
                     const flashContainer = document.getElementById('flash-messages');
                     if (flashContainer) {
@@ -650,123 +773,187 @@
                     }
                 },
                 
-                // UPS Management - Using proper REST endpoints
-                async submitUpsForm() {
-                    this.validationErrors = {};
-                    
-                    if (!this.validateUpsForm()) {
-                        return;
+                // Mobile menu
+                toggleMobileSidebar() {
+                    this.mobileMenuOpen = !this.mobileMenuOpen;
+                    const button = document.querySelector('[aria-controls="mobile-sidebar"]');
+                    if (button) {
+                        button.setAttribute('aria-expanded', this.mobileMenuOpen);
                     }
+                },
+                
+                handleEscape() {
+                    if (this.mobileMenuOpen) {
+                        this.toggleMobileSidebar();
+                    } else if (this.editingUpsId) {
+                        this.cancelEditUps();
+                    }
+                },
+                
+                // Theme handling
+                onThemeChange() {
+                    LumenTrace.ThemeManager.set(this.generalSettings.theme);
+                },
+                
+                // Validation helpers
+                isValidUpsForm() {
+                    return this.newUps.name.trim() && 
+                           LumenTrace.Utils.validateIP(this.newUps.ip) && 
+                           this.newUps.port >= 1 && 
+                           this.newUps.port <= 65535;
+                },
+                
+                isValidSettingsForm() {
+                    return this.generalSettings.refresh_interval >= 5 && 
+                           this.generalSettings.refresh_interval <= 300 &&
+                           this.generalSettings.log_retention >= 10 && 
+                           this.generalSettings.log_retention <= 1000 &&
+                           this.generalSettings.discovery_timeout >= 1 && 
+                           this.generalSettings.discovery_timeout <= 30 &&
+                           this.isValidCIDR(this.generalSettings.ip_scan_range);
+                },
+                
+                isValidCIDR(cidr) {
+                    return LumenTrace.Utils.validateCIDR(cidr);
+                },
+                
+                hasSettingsChanges() {
+                    return JSON.stringify(this.generalSettings) !== JSON.stringify(this.originalSettings);
+                },
+                
+                // UPS testing
+                async testUpsConnection(upsId) {
+                    const ups = this.upsSystems.find(u => u.id === upsId);
+                    if (!ups || this.testingUps[upsId]) return;
                     
-                    this.loading = true;
+                    this.testingUps[upsId] = true;
+                    this.upsStatuses[upsId] = 'testing';
                     
                     try {
-                        const response = await fetch('/api/ups', {
+                        const response = await fetch('/api/ups/test', {
                             method: 'POST',
-                            headers: { 
+                            headers: {
                                 'Content-Type': 'application/json',
-                                'X-CSRFToken': this.csrfToken
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
                             },
                             body: JSON.stringify({
-                                name: this.newUps.name,
-                                ip: this.newUps.ip,
-                                port: parseInt(this.newUps.port)
+                                id: ups.id,
+                                name: ups.name,
+                                ip: ups.ip,
+                                port: ups.port
                             })
                         });
                         
+                        const data = await response.json();
+                        
                         if (response.ok) {
-                            const data = await response.json();
-                            const newUps = {
-                                ...data.ups,
-                                id: data.ups.id || data.ups.name + '_' + data.ups.ip
-                            };
+                            this.upsStatuses[upsId] = data.success ? 'connected' : 'failed';
                             
-                            // Add to local state
-                            this.upsSystems.push(newUps);
-                            this.upsStatuses[newUps.id] = null;
-                            
-                            // Test the new UPS connection
-                            setTimeout(() => {
-                                this.testUpsConnection(newUps.id);
-                            }, 500);
-                            
-                            // Reset form
-                            this.newUps = { name: '', ip: '', port: 3493 };
-                            this.showToast('UPS added successfully!', 'success');
+                            if (!data.success) {
+                                this.showToast(`${ups.name} connection failed: ${data.message || 'Unknown error'}`, 'error');
+                            } else {
+                                this.showToast(`${ups.name} is connected and responding!`, 'success');
+                            }
                         } else {
-                            const errorData = await response.json();
-                            this.showToast(errorData.message || 'Failed to add UPS', 'error');
+                            throw new Error(data.message || 'Test failed');
                         }
                     } catch (error) {
-                        this.showToast('Network error occurred', 'error');
-                    } finally {
-                        this.loading = false;
+                        console.error('Error testing UPS:', error);
+                        this.upsStatuses[upsId] = 'failed';
+                        this.showToast(`Failed to test ${ups.name}: ${error.message}`, 'error');
+                    }
+                    
+                    this.testingUps[upsId] = false;
+                },
+                
+                async checkAllUpsStatuses() {
+                    const result = await LumenTrace.APIUtils.get('/get_ups_status');
+                    
+                    if (result.success && result.data.ups_systems) {
+                        this.upsSystems.forEach((ups) => {
+                            const upsFound = result.data.ups_systems.find(u => 
+                                u.name === ups.name || (u.ip === ups.ip && u.port === ups.port)
+                            );
+                            this.upsStatuses[ups.id] = upsFound ? 'connected' : 'failed';
+                        });
                     }
                 },
                 
-                validateUpsForm() {
-                    let isValid = true;
+                // UPS CRUD operations
+                async submitUpsForm() {
+                    if (this.isAddingUps || !this.isValidUpsForm()) return;
                     
-                    // Name validation
-                    if (!this.newUps.name.trim()) {
-                        this.validationErrors.name = 'UPS name is required';
-                        isValid = false;
-                    } else if (this.upsSystems.some(ups => ups.name.toLowerCase() === this.newUps.name.toLowerCase())) {
-                        this.validationErrors.name = 'UPS name already exists';
-                        isValid = false;
-                    }
+                    this.validationErrors = {};
                     
-                    // IP validation
-                    const ipPattern = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-                    if (!this.newUps.ip.trim()) {
-                        this.validationErrors.ip = 'IP address is required';
-                        isValid = false;
-                    } else if (!ipPattern.test(this.newUps.ip)) {
-                        this.validationErrors.ip = 'Please enter a valid IP address';
-                        isValid = false;
-                    }
-                    
-                    // Port validation
-                    const port = parseInt(this.newUps.port);
-                    if (!port || port < 1 || port > 65535) {
-                        this.validationErrors.port = 'Port must be between 1 and 65535';
-                        isValid = false;
-                    }
-                    
-                    return isValid;
-                },
-                
-                async removeUps(upsId, name) {
-                    if (!confirm(`Are you sure you want to remove the UPS "${name}"?`)) {
+                    // Validate form
+                    const validation = LumenTrace.FormUtils.validate(this.newUps, this.validationRules.ups);
+                    if (!validation.isValid) {
+                        this.validationErrors = validation.errors;
+                        this.showToast('Please fix the validation errors', 'error');
                         return;
                     }
                     
+                    this.isAddingUps = true;
                     this.loading = true;
+                    this.loadingMessage = 'Adding UPS...';
                     
                     try {
-                        const response = await fetch(`/api/ups/${encodeURIComponent(upsId)}`, {
-                            method: 'DELETE',
+                        // Create a proper FormData that matches what settings.py expects
+                        const formData = new FormData();
+                        formData.append('action', 'add_ups');
+                        formData.append('ups_name', this.newUps.name.trim());
+                        formData.append('ups_ip', this.newUps.ip.trim());
+                        formData.append('ups_port', this.newUps.port.toString());
+                        
+                        const response = await fetch('/settings', {
+                            method: 'POST',
                             headers: {
-                                'X-CSRFToken': this.csrfToken
-                            }
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: formData
                         });
                         
-                        if (response.ok) {
-                            const index = this.upsSystems.findIndex(ups => ups.id === upsId);
-                            if (index > -1) {
-                                this.upsSystems.splice(index, 1);
-                            }
-                            delete this.upsStatuses[upsId];
-                            
-                            this.showToast('UPS removed successfully!', 'success');
+                        // Settings.py returns a redirect on success, not JSON
+                        if (response.redirected || response.ok) {
+                            // Just reload the page to see the new UPS
+                            window.location.reload();
                         } else {
-                            const errorData = await response.json();
-                            this.showToast(errorData.message || 'Failed to remove UPS', 'error');
+                            throw new Error('Failed to add UPS');
                         }
                     } catch (error) {
-                        this.showToast('Network error occurred', 'error');
-                    } finally {
-                        this.loading = false;
+                        console.error('Error adding UPS:', error);
+                        this.showToast('Failed to add UPS. Please try again.', 'error');
+                    }
+                    
+                    this.isAddingUps = false;
+                    this.loading = false;
+                },
+                
+                async removeUps(upsId, name) {
+                    if (this.removingUps[upsId]) return;
+                    
+                    if (!confirm(`Are you sure you want to remove the UPS "${name}"? This action cannot be undone.`)) {
+                        return;
+                    }
+                    
+                    this.removingUps[upsId] = true;
+                    
+                    const result = await LumenTrace.APIUtils.delete(`/api/ups/${encodeURIComponent(upsId)}`);
+                    
+                    if (result.success) {
+                        const index = this.upsSystems.findIndex(ups => ups.id === upsId);
+                        if (index > -1) {
+                            this.upsSystems.splice(index, 1);
+                        }
+                        
+                        // Clean up state
+                        delete this.upsStatuses[upsId];
+                        delete this.testingUps[upsId];
+                        delete this.removingUps[upsId];
+                        
+                        this.showToast('UPS removed successfully!', 'success');
+                    } else {
+                        this.removingUps[upsId] = false;
                     }
                 },
                 
@@ -777,6 +964,12 @@
                     this.editingUpsId = upsId;
                     this.editingUps = { ...ups };
                     this.editValidationErrors = {};
+                    
+                    // Focus first input after render
+                    this.$nextTick(() => {
+                        const firstInput = document.querySelector(`[role="gridcell"] input`);
+                        if (firstInput) firstInput.focus();
+                    });
                 },
                 
                 cancelEditUps() {
@@ -785,60 +978,36 @@
                     this.editValidationErrors = {};
                 },
                 
-                validateEditUps() {
-                    this.editValidationErrors = {};
-                    let isValid = true;
-                    
-                    if (!this.editingUps.name.trim()) {
-                        this.editValidationErrors.name = 'UPS name is required';
-                        isValid = false;
-                    }
-                    
-                    const ipPattern = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-                    if (!ipPattern.test(this.editingUps.ip)) {
-                        this.editValidationErrors.ip = 'Please enter a valid IP address';
-                        isValid = false;
-                    }
-                    
-                    const port = parseInt(this.editingUps.port);
-                    if (!port || port < 1 || port > 65535) {
-                        this.editValidationErrors.port = 'Port must be between 1 and 65535';
-                        isValid = false;
-                    }
-                    
-                    // Check for duplicate names (excluding current)
-                    if (this.upsSystems.some(u => u.id !== this.editingUpsId && u.name.toLowerCase() === this.editingUps.name.toLowerCase())) {
-                        this.editValidationErrors.name = 'UPS name already exists';
-                        isValid = false;
-                    }
-                    
-                    return isValid;
-                },
-                
-                // Save edited UPS - single item update
                 async saveEditUps(upsId) {
-                    if (!this.validateEditUps()) {
+                    this.editValidationErrors = {};
+                    
+                    // Validate form
+                    const validation = LumenTrace.FormUtils.validate(this.editingUps, this.validationRules.ups);
+                    if (!validation.isValid) {
+                        this.editValidationErrors = validation.errors;
                         return;
                     }
                     
                     this.loading = true;
+                    this.loadingMessage = 'Updating UPS...';
                     
                     try {
                         const response = await fetch(`/api/ups/${encodeURIComponent(upsId)}`, {
                             method: 'PUT',
-                            headers: { 
+                            headers: {
                                 'Content-Type': 'application/json',
-                                'X-CSRFToken': this.csrfToken
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
                             },
                             body: JSON.stringify({
-                                name: this.editingUps.name,
-                                ip: this.editingUps.ip,
+                                name: this.editingUps.name.trim(),
+                                ip: this.editingUps.ip.trim(),
                                 port: parseInt(this.editingUps.port)
                             })
                         });
                         
-                        if (response.ok) {
-                            // Update local state
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
                             const index = this.upsSystems.findIndex(ups => ups.id === upsId);
                             if (index > -1) {
                                 this.upsSystems[index] = { 
@@ -848,67 +1017,82 @@
                                 };
                             }
                             
-                            this.editingUpsId = null;
-                            this.editingUps = {};
-                            this.editValidationErrors = {};
+                            this.cancelEditUps();
                             this.showToast('UPS configuration updated successfully!', 'success');
+                            
+                            // Re-test connection
+                            setTimeout(() => {
+                                this.testUpsConnection(upsId);
+                            }, 500);
                         } else {
-                            const errorData = await response.json();
-                            this.showToast(errorData.message || 'Failed to update UPS configuration', 'error');
+                            throw new Error(data.message || 'Failed to update UPS');
                         }
                     } catch (error) {
-                        this.showToast('Network error occurred', 'error');
-                    } finally {
-                        this.loading = false;
+                        console.error('Error updating UPS:', error);
+                        this.showToast(error.message || 'Failed to update UPS configuration', 'error');
                     }
+                    
+                    this.loading = false;
                 },
                 
-                // General Settings
+                // General settings
                 async submitGeneralSettings() {
+                    if (this.isSavingSettings || !this.isValidSettingsForm()) return;
+                    
+                    this.isSavingSettings = true;
                     this.loading = true;
+                    this.loadingMessage = 'Saving settings...';
                     
                     try {
                         const response = await fetch('/api/settings', {
                             method: 'PUT',
-                            headers: { 
+                            headers: {
                                 'Content-Type': 'application/json',
-                                'X-CSRFToken': this.csrfToken
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
                             },
-                            body: JSON.stringify(this.generalSettings)
+                            body: JSON.stringify({
+                                refresh_interval: parseInt(this.generalSettings.refresh_interval),
+                                log_retention: parseInt(this.generalSettings.log_retention),
+                                ip_scan_range: this.generalSettings.ip_scan_range,
+                                discovery_timeout: parseInt(this.generalSettings.discovery_timeout),
+                                wol_battery_threshold: parseInt(this.generalSettings.wol_battery_threshold),
+                                verbose_logging: this.generalSettings.verbose_logging,
+                                theme: this.generalSettings.theme,
+                                density: this.generalSettings.density
+                            })
                         });
                         
-                        if (response.ok) {
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                            this.originalSettings = JSON.parse(JSON.stringify(this.generalSettings));
                             this.showToast('Settings saved successfully!', 'success');
+                            
+                            // Apply theme change immediately
+                            LumenTrace.ThemeManager.set(this.generalSettings.theme);
+                            
+                            // Apply density change
+                            document.body.classList.remove('compact', 'comfortable', 'spacious');
+                            document.body.classList.add(this.generalSettings.density);
                         } else {
-                            const errorData = await response.json();
-                            this.showToast(errorData.message || 'Failed to save settings', 'error');
+                            throw new Error(data.message || 'Failed to save settings');
                         }
                     } catch (error) {
-                        this.showToast('Network error occurred', 'error');
-                    } finally {
-                        this.loading = false;
+                        console.error('Error saving settings:', error);
+                        this.showToast(error.message || 'Failed to save settings', 'error');
                     }
+                    
+                    this.isSavingSettings = false;
+                    this.loading = false;
                 },
                 
-                // Toast system
+                // Toast management
                 showToast(message, type = 'info') {
-                    const id = Date.now() + Math.random();
-                    const toast = { id, message, type, visible: true };
-                    this.toasts.push(toast);
-                    
-                    setTimeout(() => {
-                        this.removeToast(id);
-                    }, 5000);
+                    return LumenTrace.ToastManager.show(message, type);
                 },
                 
                 removeToast(id) {
-                    const index = this.toasts.findIndex(t => t.id === id);
-                    if (index > -1) {
-                        this.toasts[index].visible = false;
-                        setTimeout(() => {
-                            this.toasts.splice(index, 1);
-                        }, 200);
-                    }
+                    LumenTrace.ToastManager.remove(id);
                 }
             };
         }

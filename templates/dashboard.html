@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>LumenTrace Dashboard</title>
     <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/custom-vars.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/light-theme.css') }}" rel="stylesheet">
     <script src="{{ url_for('static', filename='js/chart.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/Sortable.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -17,47 +20,82 @@
             0%, 100% { opacity: 1; }
             50% { opacity: .5; }
         }
-    </style>
-    
-    <!-- Global error handler -->
-    <script>
-    window.addEventListener('error', (e) => {
-        if (e.error && e.error.message && e.error.message.includes('after')) {
-            console.warn('Alpine.js DOM manipulation error caught and handled');
-            e.preventDefault();
-            return false;
+        
+        @media (max-width: 768px) {
+            .drag-handle {
+                display: none !important;
+            }
         }
-    });
-    </script>
+        
+        @media (min-width: 769px) {
+            .draggable-header {
+                cursor: move !important;
+            }
+        }
+
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        .transition-height {
+            transition: height 0.3s ease-in-out;
+        }
+    </style>
     
     <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
 </head>
-<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }}" 
-      x-data="safeDashboardApp()" 
-      x-init="safeInit()">
+<body class="bg-slate-950 text-gray-300 {{ settings.density or 'comfortable' }} {% if settings.theme == 'light' %}light-theme{% endif %}" 
+      x-data="dashboardApp()" 
+      x-init="safeInit()"
+      @keydown.escape="handleEscape">
     
     <div id="toast-container" 
-         class="fixed top-4 right-4 z-50 space-y-2" 
+         class="fixed top-4 right-4 z-50 space-y-2 pointer-events-none" 
          x-show="toasts.length > 0"
-         x-transition>
+         x-transition
+         role="region"
+         aria-label="Notifications"
+         aria-live="polite">
         <template x-for="toast in toasts" :key="toast.id">
-            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white"
-                 :class="toast.type === 'success' ? 'bg-green-600' : 
-                         toast.type === 'error' ? 'bg-red-600' : 
-                         toast.type === 'warning' ? 'bg-yellow-600' : 'bg-blue-600'"
+            <div class="flex items-center gap-3 p-4 rounded-lg shadow-lg max-w-sm text-white pointer-events-auto"
+                 :class="{
+                     'bg-green-600': toast.type === 'success',
+                     'bg-red-600': toast.type === 'error',
+                     'bg-yellow-600': toast.type === 'warning',
+                     'bg-blue-600': toast.type === 'info'
+                 }"
                  x-show="toast.visible"
                  x-transition:enter="transition ease-out duration-300"
                  x-transition:enter-start="opacity-0 transform translate-x-full"
                  x-transition:enter-end="opacity-100 transform translate-x-0"
                  x-transition:leave="transition ease-in duration-200"
                  x-transition:leave-start="opacity-100 transform translate-x-0"
-                 x-transition:leave-end="opacity-0 transform translate-x-full">
+                 x-transition:leave-end="opacity-0 transform translate-x-full"
+                 role="alert">
+                
+                <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path x-show="toast.type === 'success'" fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'error'" fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'warning'" fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    <path x-show="toast.type === 'info'" fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
                 
                 <div class="flex-1">
                     <p class="text-sm font-medium" x-text="toast.message"></p>
                 </div>
                 
-                <button @click="removeToast(toast.id)" class="flex-shrink-0 text-white/70 hover:text-white transition-colors">
+                <button @click="removeToast(toast.id)" 
+                        class="flex-shrink-0 text-white/70 hover:text-white transition-colors focus-visible"
+                        aria-label="Dismiss notification">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                     </svg>
@@ -73,29 +111,31 @@
          x-transition:leave="transition-opacity ease-linear duration-300"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center">
+         class="fixed inset-0 z-40 bg-black bg-opacity-50 flex items-center justify-center"
+         role="status"
+         aria-live="polite">
         <div class="bg-slate-900 rounded-lg p-6 flex items-center space-x-3">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span class="text-white font-medium">Loading...</span>
+            <div class="loading-spinner rounded-full h-8 w-8 border-b-2 border-blue-500" aria-hidden="true"></div>
+            <span class="text-white font-medium">Loading dashboard data...</span>
         </div>
     </div>
 
     <div class="flex h-screen">
-        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col">
+        <aside class="w-64 bg-slate-950 border-r border-slate-800 hidden lg:flex lg:flex-col" role="navigation">
             <div class="flex flex-col items-center justify-center p-6 space-y-2">
                 <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="LumenTrace Logo" class="h-10 w-auto" />
                 <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
             </div>
             
-            <nav class="mt-10 px-6 space-y-2">
-                <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors">
-                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+            <nav class="mt-10 px-6 space-y-2" aria-label="Main navigation">
+                <a href="{{ url_for('dashboard.dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors focus-visible" aria-current="page">
+                    <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                         <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                     </svg>
                     Dashboard
                 </a>
-                <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
-                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <a href="{{ url_for('settings.settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
+                    <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
@@ -106,8 +146,12 @@
 
         <div class="flex-1 flex flex-col overflow-hidden">
             <header class="flex justify-between items-center p-4 lg:hidden bg-slate-950 border-b border-slate-800">
-                <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button @click="toggleMobileSidebar" 
+                        class="text-gray-400 hover:text-white p-2 rounded-md transition-colors focus-visible"
+                        aria-label="Toggle mobile navigation"
+                        aria-expanded="false"
+                        aria-controls="mobile-sidebar">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
                 </button>
@@ -115,10 +159,15 @@
                 <div class="w-10"></div>
             </header>
             
-            <aside id="mobile-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform -translate-x-full transition-transform duration-300 ease-in-out lg:hidden">
+            <aside id="mobile-sidebar" 
+                   class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-950 border-r border-slate-800 transform transition-transform duration-300 ease-in-out lg:hidden"
+                   :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
+                   role="navigation">
                 <div class="absolute top-0 right-0 p-4">
-                    <button onclick="toggleMobileSidebar()" class="text-gray-400 hover:text-white p-2 rounded-md transition-colors">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <button @click="toggleMobileSidebar" 
+                            class="text-gray-400 hover:text-white p-2 rounded-md transition-colors focus-visible"
+                            aria-label="Close mobile navigation">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -129,73 +178,121 @@
                     <span class="text-xl font-semibold text-white tracking-wider">LumenTrace</span>
                 </div>
                 
-                <nav class="mt-10 px-6 space-y-2">
-                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors">
-                        <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor">
+                <nav class="mt-10 px-6 space-y-2" aria-label="Mobile navigation">
+                    <a href="{{ url_for('dashboard.dashboard') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg bg-blue-600 text-white transition-colors focus-visible" aria-current="page">
+                        <svg class="w-6 h-6 mr-3" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" />
                         </svg>
                         Dashboard
                     </a>
-                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors">
-                        <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <a href="{{ url_for('settings.settings') }}" class="flex items-center px-4 py-2 text-base font-semibold rounded-lg text-gray-400 hover:text-white hover:bg-slate-800/50 transition-colors focus-visible">
+                        <svg class="w-6 h-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Settings
-                    </a>
+                    </svg>
+                    Settings
+                </a>
                 </nav>
             </aside>
 
-            <main class="flex-1 overflow-y-auto">
+            <div x-show="mobileMenuOpen" 
+                 @click="toggleMobileSidebar"
+                 class="fixed inset-0 z-30 bg-black bg-opacity-50 lg:hidden"
+                 x-transition:enter="transition-opacity ease-linear duration-300"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="transition-opacity ease-linear duration-300"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 aria-hidden="true"></div>
+
+            <main class="flex-1 overflow-y-auto" role="main">
                 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <div x-show="connectionStatus !== 'connected'" 
+                         x-transition
                          class="mb-6 p-4 rounded-lg border"
-                         :class="connectionStatus === 'connecting' ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300' : 'bg-red-500/20 border-red-500/30 text-red-300'">
+                         :class="connectionStatus === 'connecting' ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300' : 'bg-red-500/20 border-red-500/30 text-red-300'"
+                         role="alert"
+                         aria-live="polite">
                         <div class="flex items-center">
                             <div class="w-2 h-2 rounded-full mr-3"
                                  :class="connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'"></div>
-                            <span x-text="connectionStatus === 'connecting' ? 'Connecting to server...' : 'Connection lost. Retrying...'"></span>
+                            <span x-text="connectionStatus === 'connecting' ? 'Connecting to server...' : `Connection lost. Retrying in ${retryCountdown}s...`"></span>
+                            <button x-show="connectionStatus === 'disconnected'" 
+                                    @click="retryConnection"
+                                    class="ml-auto px-3 py-1 text-sm rounded-md border border-current hover:bg-white/10 transition-colors focus-visible">
+                                Retry Now
+                            </button>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-6 gap-6 items-start">
                         <div id="widget-col-1" class="lg:col-span-4 space-y-6">
                             <section id="ups-widget" 
-                                     class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
-                                <h2 class="flex items-center text-xl font-semibold text-gray-200 mb-6 cursor-move">
-                                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+                                     class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors"
+                                     data-widget-id="ups">
+                                <h2 class="flex items-center text-xl font-semibold text-gray-200 mb-6 draggable-header" tabindex="0">
+                                    <svg class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"/>
                                     </svg>
                                     UPS Status
+                                    <span x-show="upsData.length > 0" class="ml-auto text-sm font-normal text-gray-400">
+                                        <span x-text="upsData.length"></span> system<span x-show="upsData.length > 1">s</span>
+                                    </span>
                                 </h2>
                                 
                                 <div x-show="upsData.length === 0" class="text-center py-8 text-gray-500">
-                                    <p>No UPS systems configured.</p>
+                                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <p>No UPS systems configured</p>
+                                    <a href="{{ url_for('settings.settings') }}" class="mt-2 inline-block text-blue-400 hover:text-blue-300 transition-colors">
+                                        Configure UPS →
+                                    </a>
                                 </div>
                                 
                                 <div x-show="upsData.length > 0" class="space-y-4">
-                                    <template x-for="ups in upsData" :key="ups.name">
+                                    <template x-for="ups in upsData" :key="`ups-${ups.name}-${ups.ip}`">
                                         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 rounded-lg bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
                                             <div class="lg:col-span-1 self-center">
                                                 <h3 class="font-bold text-white text-lg" x-text="ups.name"></h3>
+                                                <p class="text-xs text-gray-500" x-text="ups.ip"></p>
                                             </div>
                                             
                                             <div class="text-center">
                                                 <p class="text-xs text-gray-400 mb-1">Status</p>
                                                 <p class="text-xl font-bold" 
-                                                   :class="ups.status === 'OL' ? 'text-green-400' : ups.status === 'OB' ? 'text-yellow-400' : 'text-red-400'"
-                                                   x-text="ups.status"></p>
+                                                   :class="{
+                                                       'text-green-400': ups.status === 'OL',
+                                                       'text-yellow-400': ups.status === 'OB',
+                                                       'text-red-400': ups.status !== 'OL' && ups.status !== 'OB'
+                                                   }"
+                                                   x-text="ups.status"
+                                                   :title="ups.status === 'OL' ? 'Online' : ups.status === 'OB' ? 'On Battery' : 'Unknown Status'"></p>
                                             </div>
                                             
                                             <div class="text-center">
                                                 <p class="text-xs text-gray-400 mb-1">Battery</p>
                                                 <p class="text-xl font-bold mb-2" 
-                                                   :class="ups.battery >= 80 ? 'text-green-400' : ups.battery >= 50 ? 'text-yellow-400' : 'text-red-400'"
+                                                   :class="{
+                                                       'text-green-400': ups.battery >= 80,
+                                                       'text-yellow-400': ups.battery >= 50 && ups.battery < 80,
+                                                       'text-red-400': ups.battery < 50
+                                                   }"
                                                    x-text="`${ups.battery}%`"></p>
                                                 <div class="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
                                                     <div class="h-full rounded-full transition-all duration-500"
-                                                         :class="ups.battery >= 80 ? 'bg-green-500' : ups.battery >= 50 ? 'bg-yellow-500' : 'bg-red-500'"
-                                                         :style="`width: ${ups.battery}%`"></div>
+                                                         :class="{
+                                                             'bg-green-500': ups.battery >= 80,
+                                                             'bg-yellow-500': ups.battery >= 50 && ups.battery < 80,
+                                                             'bg-red-500': ups.battery < 50
+                                                         }"
+                                                         :style="`width: ${ups.battery}%`"
+                                                         role="progressbar"
+                                                         :aria-valuenow="ups.battery"
+                                                         aria-valuemin="0"
+                                                         aria-valuemax="100"
+                                                         :aria-label="`Battery level: ${ups.battery}%`"></div>
                                                 </div>
                                             </div>
                                             
@@ -214,8 +311,17 @@
                                                 <p class="text-xl font-bold mb-2 text-white" x-text="`${ups.load.toFixed(1)}%`"></p>
                                                 <div class="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
                                                     <div class="h-full rounded-full transition-all duration-500"
-                                                         :class="ups.load <= 40 ? 'bg-green-500' : ups.load <= 70 ? 'bg-yellow-500' : 'bg-red-500'"
-                                                         :style="`width: ${ups.load.toFixed(1)}%`"></div>
+                                                         :class="{
+                                                             'bg-green-500': ups.load <= 40,
+                                                             'bg-yellow-500': ups.load > 40 && ups.load <= 70,
+                                                             'bg-red-500': ups.load > 70
+                                                         }"
+                                                         :style="`width: ${ups.load.toFixed(1)}%`"
+                                                         role="progressbar"
+                                                         :aria-valuenow="ups.load"
+                                                         aria-valuemin="0"
+                                                         aria-valuemax="100"
+                                                         :aria-label="`Load level: ${ups.load.toFixed(1)}%`"></div>
                                                 </div>
                                             </div>
                                         </div>
@@ -224,25 +330,29 @@
                             </section>
                             
                             <section id="devices-widget" 
-                                     class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
+                                     class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors"
+                                     data-widget-id="devices">
                                 <div class="flex justify-between items-center mb-6">
-                                    <h2 class="flex items-center text-xl font-semibold text-gray-200 cursor-move">
-                                        <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+                                    <h2 class="flex items-center text-xl font-semibold text-gray-200 draggable-header" tabindex="0">
+                                        <svg class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                             <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"/>
                                         </svg>
                                         Devices
+                                        <span x-show="devices.length > 0" class="ml-3 text-sm font-normal text-gray-400">
+                                            <span x-text="onlineDeviceCount"></span> online / <span x-text="devices.length"></span> total
+                                        </span>
                                     </h2>
                                     <div class="flex items-center space-x-3">
-                                        <a href="{{ url_for('discover') }}" 
-                                           class="flex items-center space-x-2 px-4 py-2 text-sm font-semibold rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors">
-                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <a href="{{ url_for('devices.discover') }}" 
+                                           class="flex items-center space-x-2 px-4 py-2 text-sm font-semibold rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors focus-visible">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35m1.7-6.65a7 7 0 11-14 0 7 7 0 0114 0z" />
                                             </svg>
                                             <span>Discover</span>
                                         </a>
-                                        <a href="{{ url_for('add_device') }}" 
-                                           class="flex items-center space-x-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <a href="{{ url_for('devices.add_device') }}" 
+                                           class="flex items-center space-x-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors focus-visible">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                             </svg>
                                             <span>Add Device</span>
@@ -251,60 +361,74 @@
                                 </div>
                                 
                                 <div class="py-6">
+                                    <label for="device-search" class="sr-only">Search devices</label>
                                     <input type="text" 
                                            id="device-search"
-                                           x-model="deviceSearch" 
-                                           placeholder="Search devices..." 
-                                           class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 transition-colors" />
+                                           x-model="deviceSearchInput"
+                                           @input="debouncedSearch"
+                                           placeholder="Search by name, IP, or MAC..." 
+                                           class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all" />
                                 </div>
                                 
                                 <div x-show="devices.length === 0" 
-                                     class="text-center text-gray-500 py-8 text-sm">
-                                    <p>No devices added yet.</p>
+                                     class="text-center text-gray-500 py-8">
+                                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+                                    </svg>
+                                    <p>No devices added yet</p>
+                                    <div class="mt-3 space-x-3">
+                                        <a href="{{ url_for('devices.discover') }}" class="text-blue-400 hover:text-blue-300 transition-colors">
+                                            Discover devices →
+                                        </a>
+                                        <span class="text-gray-600">or</span>
+                                        <a href="{{ url_for('devices.add_device') }}" class="text-blue-400 hover:text-blue-300 transition-colors">
+                                            Add manually →
+                                        </a>
+                                    </div>
                                 </div>
                                 
                                 <div x-show="filteredDevices.length === 0 && devices.length > 0" 
-                                     class="text-center text-gray-500 py-8 text-sm">
-                                    <p>No devices match your search.</p>
+                                     class="text-center text-gray-500 py-8">
+                                    <p>No devices match your search</p>
                                 </div>
                                 
                                 <div class="space-y-2">
-                                    <template x-for="(device, index) in filteredDevices" :key="`device-${device.ip}-${index}`">
-                                        <div class="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all">
+                                    <template x-for="device in filteredDevices" :key="`device-${device.ip}`">
+                                        <div class="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all"
+                                             :data-device-ip="device.ip">
                                             <div class="flex-1 min-w-0">
                                                 <div class="flex items-center space-x-3 mb-1">
                                                     <span class="font-semibold text-white truncate" x-text="device.name || 'Unknown Device'"></span>
                                                     <span class="px-2 py-0.5 text-xs font-medium rounded-full inline-flex items-center"
-                                                        :class="device.online ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'">
+                                                        :class="device.online ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'"
+                                                        role="status"
+                                                        :aria-label="`${device.name} is ${device.online ? 'online' : 'offline'}`">
                                                         <span class="inline-flex w-2 h-2 mr-2 rounded-full"
                                                             :class="device.online ? 'bg-green-500 dot-pulse-green' : 'bg-red-500'"></span>
                                                         <span x-text="device.online ? 'Online' : 'Offline'"></span>
                                                     </span>
                                                 </div>
                                                 <p class="font-mono text-sm text-gray-400 truncate">
-                                                    <span x-text="device.mac || 'N/A'"></span> • <span x-text="device.ip || 'N/A'"></span>
+                                                    <span x-text="device.mac || 'No MAC'"></span> • <span x-text="device.ip"></span>
+                                                    <span x-show="device.last_seen" class="ml-2 text-xs text-gray-500">
+                                                        Last: <span x-text="formatLastSeen(device.last_seen)"></span>
+                                                    </span>
                                                 </p>
                                             </div>
                                             <div class="flex items-center space-x-2 ml-4">
-                                                <!-- Wake Button -->
                                                 <button x-show="!device.online && device.mac" 
-                                                        @click="handleWakeDevice(device, index)"
-                                                        :disabled="wakingDevices[index]"
-                                                        class="px-3 py-1 rounded-md text-sm border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                                        x-text="wakingDevices[index] ? 'Waking...' : 'Wake'">
+                                                        @click="handleWakeDevice(device)"
+                                                        :disabled="wakingDevices[device.ip]"
+                                                        class="px-3 py-1 rounded-md text-sm border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible"
+                                                        :aria-label="`Wake ${device.name}`">
+                                                    <span x-show="!wakingDevices[device.ip]">Wake</span>
+                                                    <span x-show="wakingDevices[device.ip]">Waking...</span>
                                                 </button>
                                                 
-                                                <!-- Edit Button -->
-                                                <button @click="navigateToEdit(index)"
-                                                        class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors">
+                                                <button @click="navigateToEdit(device)"
+                                                        class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible"
+                                                        :aria-label="`Edit ${device.name}`">
                                                     Edit
-                                                </button>
-                                                
-                                                <!-- Remove Button -->
-                                                <button @click="handleRemoveDevice(index, device.name)"
-                                                        :disabled="removingDevices[index]"
-                                                        class="px-3 py-1 rounded-md text-sm border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                                        x-text="removingDevices[index] ? 'Removing...' : 'Remove'">
                                                 </button>
                                             </div>
                                         </div>
@@ -314,61 +438,93 @@
                         </div>
                         
                         <div id="widget-col-2" class="lg:col-span-2 space-y-6">
-                            <section id="analytics-widget" class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
-                                <h2 class="flex items-center text-xl font-semibold text-gray-200 mb-4 cursor-move">
-                                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+                            <section id="analytics-widget" 
+                                     class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors"
+                                     data-widget-id="analytics">
+                                <h2 class="flex items-center text-xl font-semibold text-gray-200 mb-4 draggable-header" tabindex="0">
+                                    <svg class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"/>
                                     </svg>
                                     Battery Analytics
                                 </h2>
                                 <p class="text-sm text-gray-400 my-4">
                                     Predicted Runtime: 
-                                    <span id="predicted-time" class="font-bold text-blue-400" x-text="batteryAnalytics.predicted_time || 'Loading...'"></span>
+                                    <span class="font-bold text-blue-400" x-text="batteryAnalytics.predicted_time || 'Calculating...'"></span>
                                 </p>
-                                <div class="h-48"><canvas id="battery-chart"></canvas></div>
+                                <div class="h-48 relative">
+                                    <canvas id="battery-chart" aria-label="Battery level over time chart"></canvas>
+                                    <div x-show="!chartInitialized && (!batteryAnalytics.history || batteryAnalytics.history.length === 0)" 
+                                         class="absolute inset-0 flex items-center justify-center bg-slate-900/50 rounded">
+                                        <div class="text-center">
+                                            <svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                            </svg>
+                                            <p class="text-sm text-gray-500">No battery data available yet</p>
+                                            <p class="text-xs text-gray-600 mt-1">Data will appear when power events occur</p>
+                                        </div>
+                                    </div>
+                                    <div x-show="!chartInitialized && batteryAnalytics.history && batteryAnalytics.history.length > 0" 
+                                         class="absolute inset-0 flex items-center justify-center bg-slate-900/50 rounded">
+                                        <p class="text-sm text-gray-500">Loading chart...</p>
+                                    </div>
+                                </div>
                             </section>
 
                             <section id="logs-widget" 
-                                     class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
-                                <h2 class="flex items-center text-xl font-semibold text-gray-200 mb-4 cursor-move">
-                                    <svg class="w-5 h-5 mr-3 text-slate-500 group-hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+                                     class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors"
+                                     data-widget-id="logs">
+                                <h2 class="flex items-center text-xl font-semibold text-gray-200 mb-4 draggable-header" tabindex="0">
+                                    <svg class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                                         <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"/>
                                     </svg>
                                     System Logs
+                                    <span x-show="logs.length > 0" class="ml-auto text-sm font-normal text-gray-400">
+                                        <span x-text="logs.length"></span> entries
+                                    </span>
                                 </h2>
                                 
                                 <div class="pt-2">
+                                    <label for="log-search" class="sr-only">Search logs</label>
                                     <input type="text" 
                                            id="log-search"
-                                           x-model="logSearch" 
+                                           x-model="logSearchInput"
+                                           @input="debouncedLogSearch"
                                            placeholder="Search logs..." 
-                                           class="w-full p-2 my-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 transition-colors" />
+                                           class="w-full p-2 my-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all" />
                                 </div>
                                 
-                                <div x-show="logs.length === 0" class="text-center text-gray-500 mt-4 text-sm">
-                                    <p>No logs available.</p>
+                                <div x-show="logs.length === 0" class="text-center text-gray-500 mt-4">
+                                    <p>No logs available</p>
                                 </div>
                                 
-                                <div x-show="filteredLogs.length === 0 && logs.length > 0" class="text-center text-gray-500 mt-4 text-sm">
-                                    <p>No logs match your search.</p>
+                                <div x-show="logs.length > 0">
+                                    <div x-show="filteredLogs.length === 0" class="text-center text-gray-500 mt-4">
+                                        <p>No logs match your search</p>
+                                    </div>
+                                    
+                                    <ul x-show="filteredLogs.length > 0"
+                                        class="max-h-60 overflow-y-auto space-y-1 text-sm" 
+                                        role="log" 
+                                        aria-live="polite"
+                                        aria-label="System activity log">
+                                        <template x-for="(log, index) in filteredLogs" :key="`log-${index}-${log.time}`">
+                                            <li class="p-2 border-l-4 bg-slate-800/50 rounded transition-colors hover:bg-slate-800/70"
+                                                :class="{
+                                                    'border-slate-700': !log.level || log.level === 'INFO',
+                                                    'border-slate-800': log.level === 'DEBUG',
+                                                    'border-yellow-900/50': log.level === 'WARNING',
+                                                    'border-red-900/50': log.level === 'ERROR'
+                                                }">
+                                                <div class="flex justify-between items-start">
+                                                    <span class="text-gray-300 flex-1 mr-2 break-words" x-text="log.message || 'No message'"></span>
+                                                    <time class="font-mono text-xs text-gray-500 whitespace-nowrap" 
+                                                          :datetime="log.time" 
+                                                          x-text="formatLogTime(log.time)"></time>
+                                                </div>
+                                            </li>
+                                        </template>
+                                    </ul>
                                 </div>
-                                
-                                <ul class="max-h-60 overflow-y-auto space-y-1 text-sm">
-                                    <template x-for="log in filteredLogs" :key="log.time + log.message">
-                                        <li class="p-2 border-l-4 bg-slate-800/50 rounded"
-                                            :class="{
-                                                'border-slate-700': !log.level || log.level === 'INFO',
-                                                'border-slate-800': log.level === 'DEBUG',
-                                                'border-yellow-900/50': log.level === 'WARNING',
-                                                'border-red-900/50': log.level === 'ERROR'
-                                            }">
-                                            <div class="flex justify-between items-center">
-                                                <span class="text-gray-300" x-text="log.message"></span>
-                                                <span class="font-mono text-xs text-gray-500" x-text="log.time"></span>
-                                            </div>
-                                        </li>
-                                    </template>
-                                </ul>
                             </section>
                         </div>
                     </div>
@@ -378,79 +534,30 @@
     </div>
 
     <script>
-    function toggleMobileSidebar() {
-        const sidebar = document.getElementById('mobile-sidebar');
-        if (sidebar) {
-            sidebar.classList.toggle('-translate-x-full');
-        }
-    }
-    
-    // Safe wrapper for Alpine.js initialization
-    function safeDashboardApp() {
-        try {
-            return dashboardApp();
-        } catch (error) {
-            console.error('Failed to initialize Dashboard app:', error);
-            return {
-                loading: false,
-                toasts: [],
-                devices: [],
-                upsData: [],
-                logs: [],
-                connectionStatus: 'connected',
-                deviceSearch: '',
-                logSearch: '',
-                batteryAnalytics: { predicted_time: 'Error loading' },
-                filteredDevices: [],
-                filteredLogs: [],
-                wakingDevices: {},
-                removingDevices: {},
-                init() { console.log('Safe fallback dashboard initialization'); },
-                showToast() {},
-                removeToast() {},
-                handleWakeDevice() {},
-                handleRemoveDevice() {},
-                navigateToEdit() {}
-            };
-        }
-    }
-    
-    function safeInit() {
-        try {
-            if (this.init && typeof this.init === 'function') {
-                this.init();
-            }
-        } catch (error) {
-            console.error('Dashboard initialization failed:', error);
-        }
-    }
-    </script>
-
-    <script>
-        // Updated dashboard JavaScript with better button handling
         function dashboardApp() {
             return {
-                // State
-                sidebarOpen: false,
                 loading: false,
                 connectionStatus: 'connected',
+                retryCountdown: 5,
+                retryTimer: null,
                 toasts: [],
-                
-                // Device action states
-                wakingDevices: {},
-                removingDevices: {},
-                
-                // Data
+                mobileMenuOpen: false,
+                refreshInterval: {{ settings.refresh_interval | default(30) }} * 1000,
+                pollingManager: null,
                 devices: [],
                 upsData: [],
                 logs: [],
-                batteryAnalytics: { predicted_time: 'Loading...', history: [] },
-                
-                // Search filters
+                batteryAnalytics: { predicted_time: 'Calculating...', history: [] },
+                deviceSearchInput: '',
                 deviceSearch: '',
+                logSearchInput: '',
                 logSearch: '',
+                wakingDevices: {},
+                theme: '{{ settings.theme if settings.theme else "dark" }}',
+                batteryChart: null,
+                chartInitialized: false,
+                sortableInstances: [],
                 
-                // Computed properties
                 get filteredDevices() {
                     if (!this.deviceSearch) return this.devices;
                     const search = this.deviceSearch.toLowerCase();
@@ -462,228 +569,264 @@
                 },
                 
                 get filteredLogs() {
-                    if (!this.logSearch) return this.logs;
+                    if (!this.logs || this.logs.length === 0) {
+                        return [];
+                    }
+                    if (!this.logSearch || this.logSearch.trim() === '') {
+                        return this.logs;
+                    }
                     const search = this.logSearch.toLowerCase();
-                    return this.logs.filter(log => 
-                        (log.message || '').toLowerCase().includes(search)
-                    );
+                    return this.logs.filter(log => {
+                        if (!log || typeof log !== 'object') return false;
+                        const message = log.message || '';
+                        return message.toLowerCase().includes(search);
+                    });
                 },
                 
-                // Safe initialization
+                get onlineDeviceCount() {
+                    return this.devices.filter(d => d.online).length;
+                },
+                
+                safeInit() {
+                    try {
+                        this.init();
+                    } catch (error) {
+                        console.error('Dashboard initialization failed:', error);
+                        this.showToast('Dashboard initialization failed', 'error');
+                    }
+                },
+                
                 init() {
+                    LumenTrace.ToastManager.setAlpineComponent(this);
+                    LumenTrace.ThemeManager.init(this.theme);
+                    this.pollingManager = new LumenTrace.PollingManager();
+                    
+                    this.debouncedSearch = LumenTrace.Utils.debounce(() => {
+                        this.deviceSearch = this.deviceSearchInput;
+                    }, 300);
+                    
+                    this.debouncedLogSearch = LumenTrace.Utils.debounce(() => {
+                        this.logSearch = this.logSearchInput;
+                    }, 300);
+                    
                     this.$nextTick(() => {
-                        try {
-                            this.refreshAll();
+                        this.loading = true;
+                        this.refreshAll().then(() => {
+                            this.loading = false;
+                            this.devices.forEach(device => {
+                                this.wakingDevices[device.ip] = false;
+                            });
                             this.startPolling();
-                            this.initializeDragAndDrop();
-                        } catch (error) {
-                            console.error('Dashboard initialization error:', error);
+                            this.handleResizeForDragAndDrop();
+                            window.addEventListener('resize', this.handleResizeForDragAndDrop.bind(this));
+                        });
+                    });
+                    
+                    window.addEventListener('beforeunload', () => {
+                        this.cleanup();
+                    });
+                    
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) {
+                            this.pollingManager.pause();
+                        } else {
+                            this.pollingManager.resume();
+                            this.refreshAll();
                         }
                     });
                 },
                 
-                // Improved device action handlers
-                async handleWakeDevice(device, index) {
+                cleanup() {
+                    if (this.pollingManager) {
+                        this.pollingManager.destroy();
+                    }
+                    if (this.batteryChart) {
+                        this.batteryChart.destroy();
+                        this.batteryChart = null;
+                    }
+                    if (this.retryTimer) {
+                        clearInterval(this.retryTimer);
+                    }
+                    this.sortableInstances.forEach(sortable => sortable.destroy());
+                },
+                
+                toggleMobileSidebar() {
+                    this.mobileMenuOpen = !this.mobileMenuOpen;
+                    const button = document.querySelector('[aria-controls="mobile-sidebar"]');
+                    if (button) {
+                        button.setAttribute('aria-expanded', this.mobileMenuOpen);
+                    }
+                },
+                
+                handleEscape() {
+                    if (this.mobileMenuOpen) {
+                        this.toggleMobileSidebar();
+                    }
+                },
+                
+                setConnectionStatus(status) {
+                    this.connectionStatus = status;
+                    if (status === 'disconnected') {
+                        this.startRetryCountdown();
+                    } else {
+                        this.stopRetryCountdown();
+                    }
+                },
+                
+                startRetryCountdown() {
+                    this.retryCountdown = 5;
+                    this.retryTimer = setInterval(() => {
+                        this.retryCountdown--;
+                        if (this.retryCountdown <= 0) {
+                            this.retryConnection();
+                        }
+                    }, 1000);
+                },
+                
+                stopRetryCountdown() {
+                    if (this.retryTimer) {
+                        clearInterval(this.retryTimer);
+                        this.retryTimer = null;
+                    }
+                },
+                
+                async retryConnection() {
+                    this.stopRetryCountdown();
+                    this.setConnectionStatus('connecting');
+                    await this.refreshAll();
+                },
+                
+                async handleWakeDevice(device) {
                     if (!device.mac) {
                         this.showToast('No MAC address available for this device', 'error');
                         return;
                     }
-                    
-                    // Set loading state for this specific device
-                    this.wakingDevices[index] = true;
-                    
+                    this.wakingDevices[device.ip] = true;
                     try {
                         const response = await fetch('/wake_device', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
                             body: JSON.stringify({ mac: device.mac })
                         });
-                        
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        
                         const data = await response.json();
-                        this.showToast(data.message || 'Wake command sent', data.success ? 'success' : 'error');
-                        
-                        if (data.success) {
-                            // Refresh devices after a short delay
-                            setTimeout(() => {
-                                this.refreshDevices();
-                            }, 1000);
+                        if (response.ok && data.success) {
+                            this.showToast(data.message || `Wake-on-LAN packet sent to ${device.name}`, 'success');
+                            setTimeout(() => this.refreshDevices(), 5000);
+                            setTimeout(() => this.refreshDevices(), 10000);
+                        } else {
+                            throw new Error(data.message || 'Failed to send wake packet');
                         }
                     } catch (error) {
                         console.error('Wake device error:', error);
-                        this.showToast('Network error occurred', 'error');
-                    } finally {
-                        // Clear loading state
-                        this.wakingDevices[index] = false;
+                        this.showToast(`Failed to wake ${device.name}: ${error.message}`, 'error');
+                        this.wakingDevices[device.ip] = false;
                     }
                 },
                 
-                async handleRemoveDevice(index, deviceName) {
-                    if (!confirm(`Are you sure you want to remove ${deviceName || 'this device'}?`)) {
-                        return;
-                    }
-                    
-                    // Set loading state for this specific device
-                    this.removingDevices[index] = true;
-                    
-                    try {
-                        const response = await fetch('/remove_device', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ index })
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error(`HTTP error! status: ${response.status}`);
-                        }
-                        
-                        const data = await response.json();
-                        this.showToast(data.message || 'Device removed', data.success ? 'success' : 'error');
-                        
-                        if (data.success) {
-                            // Remove from local state immediately for better UX
-                            this.devices.splice(index, 1);
-                            // Also refresh to ensure consistency
-                            this.refreshDevices();
-                        }
-                    } catch (error) {
-                        console.error('Remove device error:', error);
-                        this.showToast('Network error occurred', 'error');
-                    } finally {
-                        // Clear loading state
-                        this.removingDevices[index] = false;
-                    }
-                },
-                
-                navigateToEdit(index) {
-                    try {
+                navigateToEdit(device) {
+                    const index = this.devices.findIndex(d => d.ip === device.ip);
+                    if (index !== -1) {
                         window.location.href = `/edit_device/${index}`;
-                    } catch (error) {
-                        console.error('Navigation error:', error);
-                        this.showToast('Navigation error occurred', 'error');
                     }
                 },
                 
-                // API calls with improved error handling
                 async refreshUpsStatus() {
-                    try {
-                        const response = await fetch('/get_ups_status');
-                        if (!response.ok) throw new Error('UPS status fetch failed');
-                        const data = await response.json();
-                        this.upsData = Array.isArray(data.ups_systems) ? data.ups_systems : [];
-                        this.connectionStatus = 'connected';
-                    } catch (error) {
-                        console.error('Error fetching UPS status:', error);
-                        this.connectionStatus = 'disconnected';
-                        this.upsData = [];
+                    const result = await LumenTrace.APIUtils.get('/get_ups_status');
+                    if (result.success) {
+                        this.upsData = Array.isArray(result.data.ups_systems) ? result.data.ups_systems : [];
+                        return true;
                     }
+                    return false;
                 },
                 
                 async refreshDevices() {
-                    try {
-                        const response = await fetch('/get_devices');
-                        if (!response.ok) throw new Error('Devices fetch failed');
-                        const data = await response.json();
-                        this.devices = Array.isArray(data.devices) ? data.devices.map(device => ({
+                    const result = await LumenTrace.APIUtils.get('/get_devices');
+                    if (result.success) {
+                        this.devices = Array.isArray(result.data.devices) ? result.data.devices.map(device => ({
                             name: device.name || 'Unknown Device',
                             ip: device.ip || '',
                             mac: device.mac || '',
                             online: Boolean(device.online),
                             last_seen: device.last_seen || null
                         })) : [];
-                        this.connectionStatus = 'connected';
-                    } catch (error) {
-                        console.error('Error fetching devices:', error);
-                        this.connectionStatus = 'disconnected';
-                        this.devices = [];
+                        return true;
                     }
+                    return false;
                 },
                 
                 async refreshLogs() {
-                    try {
-                        const response = await fetch('/get_logs');
-                        if (!response.ok) throw new Error('Logs fetch failed');
-                        const data = await response.json();
-                        this.logs = Array.isArray(data.logs) ? data.logs.reverse() : [];
-                        this.connectionStatus = 'connected';
-                    } catch (error) {
-                        console.error('Error fetching logs:', error);
-                        this.connectionStatus = 'disconnected';
-                        this.logs = [];
+                    const result = await LumenTrace.APIUtils.get('/get_logs');
+                    if (result.success) {
+                        this.logs = Array.isArray(result.data.logs) ? [...result.data.logs].reverse() : [];
+                        return true;
                     }
+                    return false;
                 },
                 
                 async refreshBatteryAnalytics() {
-                    try {
-                        const response = await fetch('/get_battery_analytics');
-                        if (!response.ok) throw new Error('Battery analytics fetch failed');
-                        const data = await response.json();
-                        this.batteryAnalytics = data || { predicted_time: 'Error loading', history: [] };
-                        this.updateBatteryChart(data);
-                        this.connectionStatus = 'connected';
-                    } catch (error) {
-                        console.error('Error fetching battery analytics:', error);
-                        this.connectionStatus = 'disconnected';
-                        this.batteryAnalytics = { predicted_time: 'Error loading', history: [] };
+                    const result = await LumenTrace.APIUtils.get('/get_battery_analytics');
+                    if (result.success) {
+                        this.batteryAnalytics = result.data || { predicted_time: 'N/A', history: [] };
+                        this.updateBatteryChart(result.data);
+                        return true;
                     }
+                    return false;
                 },
-                
+
                 async refreshAll() {
-                    this.connectionStatus = 'connecting';
-                    await Promise.allSettled([
-                        this.refreshUpsStatus(),
-                        this.refreshDevices(),
-                        this.refreshLogs(),
-                        this.refreshBatteryAnalytics()
-                    ]);
-                },
-                
-                // Toast system
-                showToast(message, type = 'info') {
-                    const id = Date.now() + Math.random(); // More unique IDs
-                    const toast = { id, message, type, visible: true };
-                    this.toasts.push(toast);
-                    
-                    setTimeout(() => {
-                        this.removeToast(id);
-                    }, 5000);
-                },
-                
-                removeToast(id) {
-                    const index = this.toasts.findIndex(t => t.id === id);
-                    if (index > -1) {
-                        this.toasts[index].visible = false;
-                        setTimeout(() => {
-                            this.toasts.splice(index, 1);
-                        }, 200);
+                    this.setConnectionStatus('connecting');
+                    try {
+                        const results = await Promise.allSettled([
+                            this.refreshUpsStatus(),
+                            this.refreshDevices(),
+                            this.refreshLogs(),
+                            this.refreshBatteryAnalytics()
+                        ]);
+
+                        const allFailed = results.every(res => res.status === 'fulfilled' && res.value === false);
+
+                        if (allFailed) {
+                            this.setConnectionStatus('disconnected');
+                        } else {
+                            this.setConnectionStatus('connected');
+                        }
+                    } catch (error) {
+                        console.error('Error during parallel refresh:', error);
+                        this.setConnectionStatus('disconnected');
                     }
                 },
                 
-                // Battery chart with safe initialization
                 updateBatteryChart(data) {
-                    try {
-                        const ctx = document.getElementById('battery-chart');
-                        if (!ctx) return;
-                        
-                        if (!data || !Array.isArray(data.history)) return;
-                        
-                        const labels = data.history.map(h => 
-                            new Date(h.timestamp * 1000).toLocaleTimeString([], { 
-                                hour: '2-digit', 
-                                minute: '2-digit' 
-                            })
-                        );
-                        const chartData = data.history.map(h => h.battery);
-                        
-                        if (window.batteryChart) {
-                            window.batteryChart.data.labels = labels;
-                            window.batteryChart.data.datasets[0].data = chartData;
-                            window.batteryChart.update();
-                        } else if (window.Chart) {
-                            window.batteryChart = new Chart(ctx, {
+                    if (!LumenTrace.Utils.isLibraryLoaded('Chart')) {
+                        console.warn('Chart.js not loaded');
+                        return;
+                    }
+                    const ctx = document.getElementById('battery-chart');
+                    if (!ctx) return;
+                    
+                    if (!data || !Array.isArray(data.history) || data.history.length === 0) {
+                        if (this.batteryChart) {
+                            this.batteryChart.destroy();
+                            this.batteryChart = null;
+                        }
+                        this.chartInitialized = false;
+                        this.batteryAnalytics.predicted_time = 'No data available';
+                        return;
+                    }
+                    
+                    const labels = data.history.map(h => LumenTrace.Utils.formatTime(h.timestamp));
+                    const chartData = data.history.map(h => h.battery);
+                    
+                    if (this.batteryChart) {
+                        this.batteryChart.data.labels = labels;
+                        this.batteryChart.data.datasets[0].data = chartData;
+                        this.batteryChart.update('none');
+                    } else {
+                        try {
+                            this.batteryChart = LumenTrace.Utils.createChart(ctx, {
                                 type: 'line',
                                 data: {
                                     labels,
@@ -693,77 +836,169 @@
                                         borderColor: '#4a90e2',
                                         backgroundColor: 'rgba(74,144,226,0.2)',
                                         tension: 0.4,
-                                        fill: true
+                                        fill: true,
+                                        pointRadius: 2,
+                                        pointHoverRadius: 4
                                     }]
                                 },
                                 options: {
                                     responsive: true,
                                     maintainAspectRatio: false,
+                                    interaction: {
+                                        intersect: false,
+                                        mode: 'index'
+                                    },
                                     scales: {
                                         y: {
                                             min: 0,
                                             max: 100,
-                                            ticks: { color: '#9ca3af' },
+                                            ticks: { color: '#9ca3af', stepSize: 20 },
                                             grid: { color: 'rgba(255,255,255,0.1)' }
                                         },
                                         x: {
-                                            ticks: { color: '#9ca3af' },
+                                            ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
                                             grid: { display: false }
                                         }
                                     },
                                     plugins: {
-                                        legend: { display: false }
+                                        legend: { display: false },
+                                        tooltip: {
+                                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                            titleColor: '#fff',
+                                            bodyColor: '#fff',
+                                            borderColor: '#4a90e2',
+                                            borderWidth: 1,
+                                            displayColors: false,
+                                            callbacks: {
+                                                label: function(context) {
+                                                    return `Battery: ${context.parsed.y}%`;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             });
+                            
+                            if (this.batteryChart) {
+                                this.chartInitialized = true;
+                            }
+                        } catch (error) {
+                            console.error('Failed to create battery chart:', error);
+                            this.chartInitialized = false;
                         }
-                    } catch (error) {
-                        console.error('Battery chart update failed:', error);
                     }
                 },
                 
-                // Polling
                 startPolling() {
-                    try {
-                        const intervals = {
-                            ups: 5000,
-                            devices: 5000,
-                            analytics: 5000,
-                            logs: 7000
-                        };
-                        
-                        setInterval(() => this.refreshUpsStatus(), intervals.ups);
-                        setInterval(() => this.refreshDevices(), intervals.devices);
-                        setInterval(() => this.refreshBatteryAnalytics(), intervals.analytics);
-                        setInterval(() => this.refreshLogs(), intervals.logs);
-                    } catch (error) {
-                        console.error('Failed to start polling:', error);
-                    }
+                    this.pollingManager.start('ups', () => this.refreshUpsStatus(), this.refreshInterval);
+                    this.pollingManager.start('devices', () => this.refreshDevices(), this.refreshInterval * 2);
+                    this.pollingManager.start('analytics', () => this.refreshBatteryAnalytics(), this.refreshInterval * 5);
+                    this.pollingManager.start('logs', () => this.refreshLogs(), this.refreshInterval * 1.5);
                 },
-                
-                // Drag and drop (simplified)
-                initializeDragAndDrop() {
-                    try {
+
+                handleResizeForDragAndDrop() {
+                    if (!LumenTrace.Utils.isLibraryLoaded('Sortable')) {
+                        return;
+                    }
+                    
+                    const enableDrag = window.innerWidth >= 1024;
+
+                    if (enableDrag && this.sortableInstances.length === 0) {
                         const col1 = document.getElementById('widget-col-1');
                         const col2 = document.getElementById('widget-col-2');
                         
-                        if (col1 && col2 && window.Sortable) {
-                            new Sortable(col1, {
+                        if (col1 && col2) {
+                            const options = {
                                 group: 'dashboard-widgets',
                                 animation: 150,
                                 ghostClass: 'opacity-50',
-                                handle: 'h2'
-                            });
-                            
-                            new Sortable(col2, {
-                                group: 'dashboard-widgets',
-                                animation: 150,
-                                ghostClass: 'opacity-50',
-                                handle: 'h2'
-                            });
+                                handle: '.draggable-header',
+                                forceFallback: true,
+                                fallbackOnBody: true,
+                                swapThreshold: 0.65,
+                                onEnd: () => this.saveWidgetPositions()
+                            };
+                            this.sortableInstances.push(new Sortable(col1, options));
+                            this.sortableInstances.push(new Sortable(col2, options));
+                            this.restoreWidgetPositions();
                         }
+                    } else if (!enableDrag && this.sortableInstances.length > 0) {
+                        this.sortableInstances.forEach(instance => instance.destroy());
+                        this.sortableInstances = [];
+                    }
+                },
+                
+                saveWidgetPositions() {
+                    const positions = {};
+                    document.querySelectorAll('[data-widget-id]').forEach((widget, index) => {
+                        const id = widget.getAttribute('data-widget-id');
+                        const col = widget.parentElement.id;
+                        positions[id] = { col, index };
+                    });
+                    localStorage.setItem('lumentrace-widget-positions', JSON.stringify(positions));
+                },
+                
+                restoreWidgetPositions() {
+                    const saved = localStorage.getItem('lumentrace-widget-positions');
+                    if (!saved) return;
+                    
+                    try {
+                        const positions = JSON.parse(saved);
+                        const widgets = {};
+                        
+                        document.querySelectorAll('[data-widget-id]').forEach(widget => {
+                            const id = widget.getAttribute('data-widget-id');
+                            widgets[id] = widget;
+                        });
+                        
+                        Object.entries(positions)
+                            .sort((a, b) => a[1].index - b[1].index)
+                            .forEach(([id, { col }]) => {
+                                const widget = widgets[id];
+                                const column = document.getElementById(col);
+                                if (widget && column) {
+                                    column.appendChild(widget);
+                                }
+                            });
                     } catch (error) {
-                        console.warn('Drag and drop initialization failed:', error);
+                        console.error('Failed to restore widget positions:', error);
+                    }
+                },
+                
+                showToast(message, type = 'info') {
+                    return LumenTrace.ToastManager.show(message, type);
+                },
+                
+                removeToast(id) {
+                    LumenTrace.ToastManager.remove(id);
+                },
+                
+                formatLastSeen(lastSeen) {
+                    if (!lastSeen) return 'Never';
+                    const date = new Date(lastSeen);
+                    const now = new Date();
+                    const diff = now - date;
+                    if (diff < 60000) return 'Just now';
+                    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                    return date.toLocaleDateString();
+                },
+                
+                formatLogTime(time) {
+                    try {
+                        const date = new Date(time);
+                        if (isNaN(date.getTime())) {
+                            return time;
+                        }
+                        return date.toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true
+                        });
+                    } catch (error) {
+                        console.error('Error formatting time:', error, 'Original time:', time);
+                        return time;
                     }
                 }
             };

@@ -1,7 +1,4 @@
-/* Base Variables & Design Tokens - MODERN DARK PURPLE/BLUE THEME
-   ========================================================================== */
 :root {
-  /* Color Palette */
   --slate-50: #f8fafc;
   --slate-100: #f1f5f9;
   --slate-200: #e2e8f0;
@@ -24,14 +21,12 @@
   --gray-800: #262626;
   --gray-900: #1a1a1a;
   
-  /* BLUE COLORS - Now more subtle purple/indigo */
-  --blue-400: #a5b4fc;  /* Softer indigo-300 */
-  --blue-500: #818cf8;  /* Muted indigo-400 */
-  --blue-600: #6366f1;  /* Subtle indigo-500 */
-  --blue-700: #5b21b6;  /* Deeper purple-600 */
-  --blue-800: #4c1d95;  /* Deep purple-800 */
+  --blue-400: #a5b4fc;
+  --blue-500: #818cf8;
+  --blue-600: #6366f1;
+  --blue-700: #5b21b6;
+  --blue-800: #4c1d95;
   
-  /* Keep other accent colors */
   --green-400: #4ade80;
   --green-500: #22c55e;
   --green-600: #16a34a;
@@ -50,7 +45,6 @@
   --white: #ffffff;
   --black: #000000;
   
-  /* Typography */
   --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-family-mono: 'SF Mono', Monaco, Inconsolata, 'Roboto Mono', Consolas, 'Courier New', monospace;
   
@@ -73,7 +67,6 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.625;
   
-  /* Spacing & Layout */
   --spacing-1: 0.25rem;
   --spacing-2: 0.5rem;
   --spacing-3: 0.75rem;
@@ -86,32 +79,27 @@
   --spacing-16: 4rem;
   --spacing-20: 5rem;
   
-  /* Border Radius */
   --radius-sm: 0.125rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --radius-full: 9999px;
-  
-  /* Modern Shadows */
+
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.15);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.12);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
   --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
   --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
   
-  /* Special Effects */
   --glow-purple: 0 0 20px rgba(99, 102, 241, 0.3);
   --glow-blue: 0 0 20px rgba(129, 140, 248, 0.3);
   
-  /* Transitions */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
   
-  /* Z-index scale */
   --z-dropdown: 1000;
   --z-sticky: 1020;
   --z-fixed: 1030;
@@ -121,12 +109,10 @@
   --z-tooltip: 1070;
   --z-toast: 1080;
   
-  /* Density Variables */
   --density-comfortable: 1.5rem;
   --density-compact: 1rem;
 }
 
-/* Density Classes */
 body.comfortable {
   --spacing-density: var(--density-comfortable);
 }
@@ -135,8 +121,6 @@ body.compact {
   --spacing-density: var(--density-compact);
 }
 
-/* Base Styles
-   ========================================================================== */
 *,
 *::before,
 *::after {
@@ -164,8 +148,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Typography
-   ========================================================================== */
 h1, h2, h3, h4, h5, h6 {
   margin: 0;
   font-weight: var(--font-weight-bold);
@@ -201,10 +183,6 @@ code, pre {
   font-size: 0.9em;
 }
 
-/* Layout Components
-   ========================================================================== */
-
-/* Sidebar */
 .sidebar {
   position: fixed;
   top: 0;
@@ -328,7 +306,6 @@ code, pre {
   flex-shrink: 0;
 }
 
-/* Main Content */
 .main-content {
   flex: 1;
   display: flex;
@@ -391,8 +368,6 @@ code, pre {
   }
 }
 
-/* Card Components - Glass Morphism Style
-   ========================================================================== */
 .card {
   background: linear-gradient(145deg, 
     rgba(38, 38, 38, 0.4) 0%, 
@@ -466,10 +441,6 @@ code, pre {
   margin-left: auto;
 }
 
-/* Widget Specific Styles
-   ========================================================================== */
-
-/* UPS Status Widget */
 .ups-status-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -581,7 +552,6 @@ code, pre {
   background: linear-gradient(90deg, var(--red-600), var(--red-400));
 }
 
-/* Device List */
 .device-list {
   display: flex;
   flex-direction: column;
@@ -679,8 +649,6 @@ code, pre {
   margin-left: var(--spacing-4);
 }
 
-/* Animations
-   ========================================================================== */
 @keyframes pulse-dot {
   0%, 100% {
     opacity: 1;
@@ -722,8 +690,6 @@ code, pre {
   animation: slideIn var(--transition-normal) ease-out;
 }
 
-/* Form Elements
-   ========================================================================== */
 .form-group {
   margin-bottom: var(--spacing-6);
 }
@@ -769,8 +735,6 @@ code, pre {
   color: var(--gray-500);
 }
 
-/* Button Components
-   ========================================================================== */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -827,7 +791,6 @@ code, pre {
   margin: 0;
 }
 
-/* Button Variants */
 .btn-primary {
   color: var(--white);
   background: linear-gradient(135deg, var(--blue-600) 0%, var(--blue-500) 100%);
@@ -882,7 +845,6 @@ code, pre {
   background-color: rgba(239, 68, 68, 0.1);
 }
 
-/* Button Sizes */
 .btn-sm {
   padding: var(--spacing-1) var(--spacing-3);
   font-size: var(--font-size-xs);
@@ -893,8 +855,6 @@ code, pre {
   font-size: var(--font-size-base);
 }
 
-/* Alert/Toast Components
-   ========================================================================== */
 .toast-container {
   position: fixed;
   bottom: var(--spacing-4);
@@ -975,8 +935,6 @@ code, pre {
   border: 1px solid rgba(165, 180, 252, 0.25);
 }
 
-/* Table Components
-   ========================================================================== */
 .table-container {
   overflow-x: auto;
   border-radius: var(--radius-xl);
@@ -1015,8 +973,6 @@ code, pre {
   border-bottom: none;
 }
 
-/* Search/Filter Components
-   ========================================================================== */
 .search-input {
   width: 100%;
   padding: var(--spacing-2) var(--spacing-4);
@@ -1039,8 +995,6 @@ code, pre {
   color: var(--gray-500);
 }
 
-/* Utility Classes
-   ========================================================================== */
 .text-xs { font-size: var(--font-size-xs); }
 .text-sm { font-size: var(--font-size-sm); }
 .text-base { font-size: var(--font-size-base); }
@@ -1059,7 +1013,6 @@ code, pre {
 .leading-normal { line-height: var(--line-height-normal); }
 .leading-relaxed { line-height: var(--line-height-relaxed); }
 
-/* Color Utilities */
 .text-white { color: var(--white) !important; }
 .text-gray-200 { color: var(--gray-200) !important; }
 .text-gray-300 { color: var(--gray-300) !important; }
@@ -1074,7 +1027,6 @@ code, pre {
 .text-red-400 { color: var(--red-400) !important; }
 .text-yellow-400 { color: var(--yellow-400) !important; }
 
-/* Background Utilities */
 .bg-slate-950 { background-color: var(--slate-950) !important; }
 .bg-slate-900 { background-color: var(--slate-900) !important; }
 .bg-slate-800 { background-color: var(--slate-800) !important; }
@@ -1088,7 +1040,6 @@ code, pre {
 .bg-red-600 { background-color: var(--red-600) !important; }
 .bg-yellow-500 { background-color: var(--yellow-500) !important; }
 
-/* Border Utilities */
 .border-slate-700 { border-color: var(--slate-700) !important; }
 .border-slate-800 { border-color: var(--slate-800) !important; }
 .border-blue-500 { border-color: var(--blue-500) !important; }
@@ -1096,52 +1047,43 @@ code, pre {
 .border-red-500 { border-color: var(--red-500) !important; }
 .border-yellow-500 { border-color: var(--yellow-500) !important; }
 
-/* Background with Opacity */
 .bg-slate-950\/80 { background-color: rgba(2, 6, 23, 0.8) !important; }
 .bg-slate-900\/50 { background-color: rgba(15, 23, 42, 0.5) !important; }
 .bg-slate-800\/50 { background-color: rgba(30, 41, 59, 0.5) !important; }
 .bg-slate-700\/50 { background-color: rgba(51, 65, 85, 0.5) !important; }
 
-/* Border with Opacity - Updated for softer theme */
 .border-blue-500\/50 { border-color: rgba(165, 180, 252, 0.4) !important; }
 .border-green-500\/50 { border-color: rgba(34, 197, 94, 0.5) !important; }
 .border-red-500\/50 { border-color: rgba(239, 68, 68, 0.5) !important; }
 .border-yellow-500\/50 { border-color: rgba(234, 179, 8, 0.5) !important; }
 
-/* Status Colors */
 .bg-green-500\/20 { background-color: rgba(34, 197, 94, 0.2) !important; }
 .bg-red-500\/20 { background-color: rgba(239, 68, 68, 0.2) !important; }
 .border-green-500\/30 { border-color: rgba(34, 197, 94, 0.3) !important; }
 .border-red-500\/30 { border-color: rgba(239, 68, 68, 0.3) !important; }
 
-/* Hover States */
 .hover\:bg-blue-700:hover { background-color: var(--blue-700) !important; }
 .hover\:bg-slate-600:hover { background-color: var(--slate-600) !important; }
 .hover\:bg-slate-800\/50:hover { background-color: rgba(30, 41, 59, 0.5) !important; }
 .hover\:text-white:hover { color: var(--white) !important; }
 .hover\:text-slate-300:hover { color: var(--slate-300) !important; }
 
-/* Hover Background with Opacity - Updated for softer theme */
 .hover\:bg-blue-500\/10:hover { background-color: rgba(165, 180, 252, 0.08) !important; }
 .hover\:bg-green-500\/10:hover { background-color: rgba(34, 197, 94, 0.1) !important; }
 .hover\:bg-red-500\/10:hover { background-color: rgba(239, 68, 68, 0.1) !important; }
 .hover\:bg-yellow-500\/10:hover { background-color: rgba(234, 179, 8, 0.1) !important; }
 
-/* Focus States */
 .focus\:border-blue-500:focus { border-color: var(--blue-500) !important; }
 .focus\:ring-blue-500\/20:focus { box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.15) !important; }
 
-/* Transform Utilities */
 .translate-y-full { transform: translateY(100%) !important; }
 .translate-y-0 { transform: translateY(0) !important; }
 .-translate-x-full { transform: translateX(-100%) !important; }
 .translate-x-0 { transform: translateX(0) !important; }
 
-/* Opacity Utilities */
 .opacity-0 { opacity: 0 !important; }
 .opacity-100 { opacity: 1 !important; }
 
-/* Transition Utilities */
 .transition-all { transition-property: all !important; }
 .transition-colors { transition-property: color, background-color, border-color !important; }
 .transition-transform { transition-property: transform !important; }
@@ -1150,11 +1092,9 @@ code, pre {
 .ease-in-out { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important; }
 .ease-out { transition-timing-function: cubic-bezier(0, 0, 0.2, 1) !important; }
 
-/* Effects */
 .backdrop-blur-xl { backdrop-filter: blur(20px) !important; }
 .backdrop-blur-sm { backdrop-filter: blur(4px) !important; }
 
-/* Legacy Support - Keep these for existing HTML compatibility */
 .status-online { 
   background-color: rgba(34, 197, 94, 0.2) !important; 
   color: var(--green-400) !important; 
@@ -1167,7 +1107,6 @@ code, pre {
   animation: pulse-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Special Modern Effects */
 .glass-card {
   background: rgba(38, 38, 38, 0.4);
   backdrop-filter: blur(16px);
@@ -1178,7 +1117,6 @@ code, pre {
   box-shadow: var(--shadow-xl), var(--glow-purple);
 }
 
-/* Loading Spinners */
 .animate-spin {
   animation: spin 1s linear infinite;
 }
