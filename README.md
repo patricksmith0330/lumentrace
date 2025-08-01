@@ -10,8 +10,6 @@ LumenTrace goes beyond simple WOL automation. It intelligently tracks which devi
 
 Inspired by the original [wolnut](https://github.com/hardwarehaven/wolnut) project.
 
----
-
 ## Setup Instructions
 
 ### Using Docker Compose
