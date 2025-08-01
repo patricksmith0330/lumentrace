@@ -1,6 +1,6 @@
+  # LumenTrace: Automated Wake-on-LAN for UPS Power Restoration
+
  <img width="1440" height="807" alt="Screenshot 2025-07-31 at 5 34 14 PM (1)" src="https://github.com/user-attachments/assets/a4c0a0c9-6c1d-4efc-a498-9fb25ac1528a" />
- 
- # LumenTrace: Automated Wake-on-LAN for UPS Power Restoration
 
 ## Overview
 
