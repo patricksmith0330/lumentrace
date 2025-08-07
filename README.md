@@ -68,6 +68,3 @@ Click the "Save Settings" button. The application will immediately begin monitor
 
 ### Add Your Devices
 Return to the Dashboard and begin adding the devices you wish to manage.
-
-## License
-LumenTrace is licensed under the GNU General Public License v3.0 (GPLv3). See the [LICENSE](https://github.com/patricksmith0330/lumentrace/?tab=GPL-3.0-1-ov-file) for full details.
