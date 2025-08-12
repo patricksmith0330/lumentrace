@@ -1,28 +1,36 @@
+/* static/css/inter.css */
+/* Inter font family declarations. Use with @import or link. */
+
 @font-face {
   font-family: 'Inter';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf) format('truetype');
+  src: url(../fonts/Inter-Regular.ttf) format('truetype');
 }
+
 @font-face {
   font-family: 'Inter';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuI6fMZg.ttf) format('truetype');
+  src: url(../fonts/Inter-Medium.ttf) format('truetype');
 }
+
 @font-face {
   font-family: 'Inter';
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYMZg.ttf) format('truetype');
+  src: url(../fonts/Inter-SemiBold.ttf) format('truetype');
 }
+
 @font-face {
   font-family: 'Inter';
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url(../fonts/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf) format('truetype');
+  src: url(../fonts/Inter-Bold.ttf) format('truetype');
 }
+
+/* Usage in CSS: font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif; */
