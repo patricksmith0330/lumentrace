@@ -1,0 +1,10 @@
+flask==3.0.3
+scapy==2.5.0
+ping3==4.0.4
+filelock==3.14.0
+python-dotenv==1.0.1
+Flask-Limiter==3.6.0
+python-json-logger==2.0.7
+waitress==3.0.2
+flask-wtf==1.2.2
+WTForms==3.1.2

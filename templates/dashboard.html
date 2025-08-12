@@ -1,0 +1,751 @@
+{% extends "_base.html" %}
+{% block title %}LumenTrace Dashboard{% endblock %}
+{% block head %}
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .dot-pulse-green { animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse-green {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        
+        @media (max-width: 768px) {
+            .drag-handle {
+                display: none !important;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .draggable-header {
+                cursor: move !important;
+            }
+        }
+
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        .transition-height {
+            transition: height 0.3s ease-in-out;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<div x-data="dashboardApp()" x-init="safeInit()" @keydown.escape="handleEscape">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div :class="connectionStatus === 'connecting' ? 'bg-yellow-500/20 border-yellow-500/30 text-yellow-300' : 'bg-red-500/20 border-red-500/30 text-red-300'" aria-live="polite" class="mb-6 p-4 rounded-lg border" role="alert" x-show="connectionStatus !== 'connected'" x-transition="">
+<div class="flex items-center">
+<div :class="connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'" class="w-2 h-2 rounded-full mr-3"></div>
+<span x-text="connectionStatus === 'connecting' ? 'Connecting to server...' : `Connection lost. Retrying in ${retryCountdown}s...`"></span>
+<button @click="retryConnection" class="ml-auto px-3 py-1 text-sm rounded-md border border-current hover:bg-white/10 transition-colors focus-visible" x-show="connectionStatus === 'disconnected'">
+                                Retry Now
+                            </button>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-6 gap-6 items-start">
+<div class="lg:col-span-4 space-y-6" id="widget-col-1">
+<section class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors" data-widget-id="ups" id="ups-widget">
+<h2 class="flex items-center text-xl font-semibold text-gray-200 mb-6 draggable-header" tabindex="0">
+<svg aria-hidden="true" class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewbox="0 0 20 20">
+<path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"></path>
+</svg>
+                                    UPS Status
+                                    <span class="ml-auto text-sm font-normal text-gray-400" x-show="upsData.length &gt; 0">
+<span x-text="upsData.length"></span> system<span x-show="upsData.length &gt; 1">s</span>
+</span>
+</h2>
+<div class="text-center py-8 text-gray-500" x-show="upsData.length === 0">
+<svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<p>No UPS systems configured</p>
+<a class="mt-2 inline-block text-blue-400 hover:text-blue-300 transition-colors" href="{{ url_for('settings.settings') }}">
+                                        Configure UPS →
+                                    </a>
+</div>
+<div class="space-y-4" x-show="upsData.length &gt; 0">
+<template :key="`ups-${ups.name}-${ups.ip}`" x-for="ups in upsData">
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 p-4 rounded-lg bg-slate-800/30 hover:bg-slate-800/50 transition-colors">
+<div class="lg:col-span-1 self-center">
+<h3 class="font-bold text-white text-lg" x-text="ups.name"></h3>
+<p class="text-xs text-gray-500" x-text="ups.ip"></p>
+</div>
+<div class="text-center">
+<p class="text-xs text-gray-400 mb-1">Status</p>
+<p :class="{
+                                                       'text-green-400': ups.status === 'OL',
+                                                       'text-yellow-400': ups.status === 'OB',
+                                                       'text-red-400': ups.status !== 'OL' &amp;&amp; ups.status !== 'OB'
+                                                   }" :title="ups.status === 'OL' ? 'Online' : ups.status === 'OB' ? 'On Battery' : 'Unknown Status'" class="text-xl font-bold" x-text="ups.status"></p>
+</div>
+<div class="text-center">
+<p class="text-xs text-gray-400 mb-1">Battery</p>
+<p :class="{
+                                                       'text-green-400': ups.battery &gt;= 80,
+                                                       'text-yellow-400': ups.battery &gt;= 50 &amp;&amp; ups.battery &lt; 80,
+                                                       'text-red-400': ups.battery &lt; 50
+                                                   }" class="text-xl font-bold mb-2" x-text="`${ups.battery}%`"></p>
+<div class="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
+<div :aria-label="`Battery level: ${ups.battery}%`" :aria-valuenow="ups.battery" :class="{
+                                                             'bg-green-500': ups.battery &gt;= 80,
+                                                             'bg-yellow-500': ups.battery &gt;= 50 &amp;&amp; ups.battery &lt; 80,
+                                                             'bg-red-500': ups.battery &lt; 50
+                                                         }" :style="`width: ${ups.battery}%`" aria-valuemax="100" aria-valuemin="0" class="h-full rounded-full transition-all duration-500" role="progressbar"></div>
+</div>
+</div>
+<div class="text-center">
+<p class="text-xs text-gray-400 mb-1">Input V</p>
+<p class="text-xl font-bold text-white" x-text="`${ups.input_voltage.toFixed(1)}V`"></p>
+</div>
+<div class="text-center">
+<p class="text-xs text-gray-400 mb-1">Output V</p>
+<p class="text-xl font-bold text-white" x-text="`${ups.output_voltage.toFixed(1)}V`"></p>
+</div>
+<div class="text-center">
+<p class="text-xs text-gray-400 mb-1">Load</p>
+<p class="text-xl font-bold mb-2 text-white" x-text="`${ups.load.toFixed(1)}%`"></p>
+<div class="w-full h-2 rounded-full bg-slate-700 overflow-hidden">
+<div :aria-label="`Load level: ${ups.load.toFixed(1)}%`" :aria-valuenow="ups.load" :class="{
+                                                             'bg-green-500': ups.load &lt;= 40,
+                                                             'bg-yellow-500': ups.load &gt; 40 &amp;&amp; ups.load &lt;= 70,
+                                                             'bg-red-500': ups.load &gt; 70
+                                                         }" :style="`width: ${ups.load.toFixed(1)}%`" aria-valuemax="100" aria-valuemin="0" class="h-full rounded-full transition-all duration-500" role="progressbar"></div>
+</div>
+</div>
+</div>
+</template>
+</div>
+</section>
+<section class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors" data-widget-id="devices" id="devices-widget">
+<div class="flex justify-between items-center mb-6">
+<h2 class="flex items-center text-xl font-semibold text-gray-200 draggable-header" tabindex="0">
+<svg aria-hidden="true" class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewbox="0 0 20 20">
+<path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"></path>
+</svg>
+                                        Devices
+                                        <span class="ml-3 text-sm font-normal text-gray-400" x-show="devices.length &gt; 0">
+<span x-text="onlineDeviceCount"></span> online / <span x-text="devices.length"></span> total
+                                        </span>
+</h2>
+<div class="flex items-center space-x-3">
+<a class="flex items-center space-x-2 px-4 py-2 text-sm font-semibold rounded-lg bg-slate-700 text-white hover:bg-slate-600 transition-colors focus-visible" href="{{ url_for('devices.discover') }}">
+<svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M21 21l-4.35-4.35m1.7-6.65a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Discover</span>
+</a>
+<a class="flex items-center space-x-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors focus-visible" href="{{ url_for('devices.add_device') }}">
+<svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Add Device</span>
+</a>
+</div>
+</div>
+<div class="py-6">
+<label class="sr-only" for="device-search">Search devices</label>
+<input @input="debouncedSearch" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all" id="device-search" placeholder="Search by name, IP, or MAC..." type="text" x-model="deviceSearchInput"/>
+</div>
+<div class="text-center text-gray-500 py-8" x-show="devices.length === 0">
+<svg class="w-12 h-12 mx-auto mb-3 text-gray-600" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<p>No devices added yet</p>
+<div class="mt-3 space-x-3">
+<a class="text-blue-400 hover:text-blue-300 transition-colors" href="{{ url_for('devices.discover') }}">
+                                            Discover devices →
+                                        </a>
+<span class="text-gray-600">or</span>
+<a class="text-blue-400 hover:text-blue-300 transition-colors" href="{{ url_for('devices.add_device') }}">
+                                            Add manually →
+                                        </a>
+</div>
+</div>
+<div class="text-center text-gray-500 py-8" x-show="filteredDevices.length === 0 &amp;&amp; devices.length &gt; 0">
+<p>No devices match your search</p>
+</div>
+<div class="space-y-2">
+<template :key="`device-${device.ip}`" x-for="device in filteredDevices">
+<div :data-device-ip="device.ip" class="flex items-center justify-between p-4 bg-slate-800/50 rounded-lg hover:bg-slate-800/70 transition-all">
+<div class="flex-1 min-w-0">
+<div class="flex items-center space-x-3 mb-1">
+<span class="font-semibold text-white truncate" x-text="device.name || 'Unknown Device'"></span>
+<span :aria-label="`${device.name} is ${device.online ? 'online' : 'offline'}`" :class="device.online ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'" class="px-2 py-0.5 text-xs font-medium rounded-full inline-flex items-center" role="status">
+<span :class="device.online ? 'bg-green-500 dot-pulse-green' : 'bg-red-500'" class="inline-flex w-2 h-2 mr-2 rounded-full"></span>
+<span x-text="device.online ? 'Online' : 'Offline'"></span>
+</span>
+</div>
+<p class="font-mono text-sm text-gray-400 truncate">
+<span x-text="device.mac || 'No MAC'"></span> • <span x-text="device.ip"></span>
+<span class="ml-2 text-xs text-gray-500" x-show="device.last_seen">
+                                                        Last: <span x-text="formatLastSeen(device.last_seen)"></span>
+</span>
+</p>
+</div>
+<div class="flex items-center space-x-2 ml-4">
+<button :aria-label="`Wake ${device.name}`" :disabled="wakingDevices[device.ip]" @click="handleWakeDevice(device)" class="px-3 py-1 rounded-md text-sm border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible" x-show="!device.online &amp;&amp; device.mac">
+<span x-show="!wakingDevices[device.ip]">Wake</span>
+<span x-show="wakingDevices[device.ip]">Waking...</span>
+</button>
+<button :aria-label="`Edit ${device.name}`" @click="navigateToEdit(device)" class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible">
+                                                    Edit
+                                                </button>
+</div>
+</div>
+</template>
+</div>
+</section>
+</div>
+<div class="lg:col-span-2 space-y-6" id="widget-col-2">
+<section class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors" data-widget-id="analytics" id="analytics-widget">
+<h2 class="flex items-center text-xl font-semibold text-gray-200 mb-4 draggable-header" tabindex="0">
+<svg aria-hidden="true" class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewbox="0 0 20 20">
+<path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"></path>
+</svg>
+                                    Battery Analytics
+                                </h2>
+<p class="text-sm text-gray-400 my-4">
+                                    Predicted Runtime: 
+                                    <span class="font-bold text-blue-400" x-text="batteryAnalytics.predicted_time || 'Calculating...'"></span>
+</p>
+<div class="h-48 relative">
+<canvas aria-label="Battery level over time chart" id="battery-chart"></canvas>
+<div class="absolute inset-0 flex items-center justify-center bg-slate-900/50 rounded" x-show="!chartInitialized &amp;&amp; (!batteryAnalytics.history || batteryAnalytics.history.length === 0)">
+<div class="text-center">
+<svg class="w-8 h-8 mx-auto mb-2 text-gray-600" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<p class="text-sm text-gray-500">No battery data available yet</p>
+<p class="text-xs text-gray-600 mt-1">Data will appear when power events occur</p>
+</div>
+</div>
+<div class="absolute inset-0 flex items-center justify-center bg-slate-900/50 rounded" x-show="!chartInitialized &amp;&amp; batteryAnalytics.history &amp;&amp; batteryAnalytics.history.length &gt; 0">
+<p class="text-sm text-gray-500">Loading chart...</p>
+</div>
+</div>
+</section>
+<section class="p-6 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors" data-widget-id="logs" id="logs-widget">
+<h2 class="flex items-center text-xl font-semibold text-gray-200 mb-4 draggable-header" tabindex="0">
+<svg aria-hidden="true" class="drag-handle w-5 h-5 mr-3 text-slate-500 hover:text-slate-300 transition-colors" fill="currentColor" viewbox="0 0 20 20">
+<path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 12zm0 6a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 18z"></path>
+</svg>
+                                    System Logs
+                                    <span class="ml-auto text-sm font-normal text-gray-400" x-show="logs.length &gt; 0">
+<span x-text="logs.length"></span> entries
+                                    </span>
+</h2>
+<div class="pt-2">
+<label class="sr-only" for="log-search">Search logs</label>
+<input @input="debouncedLogSearch" class="w-full p-2 my-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all" id="log-search" placeholder="Search logs..." type="text" x-model="logSearchInput"/>
+</div>
+<div class="text-center text-gray-500 mt-4" x-show="logs.length === 0">
+<p>No logs available</p>
+</div>
+<div x-show="logs.length &gt; 0">
+<div class="text-center text-gray-500 mt-4" x-show="filteredLogs.length === 0">
+<p>No logs match your search</p>
+</div>
+<ul aria-label="System activity log" aria-live="polite" class="max-h-60 overflow-y-auto space-y-1 text-sm" role="log" x-show="filteredLogs.length &gt; 0">
+<template :key="`log-${index}-${log.time}`" x-for="(log, index) in filteredLogs">
+<li :class="{
+                                                    'border-slate-700': !log.level || log.level === 'INFO',
+                                                    'border-slate-800': log.level === 'DEBUG',
+                                                    'border-yellow-900/50': log.level === 'WARNING',
+                                                    'border-red-900/50': log.level === 'ERROR'
+                                                }" class="p-2 border-l-4 bg-slate-800/50 rounded transition-colors hover:bg-slate-800/70">
+<div class="flex justify-between items-start">
+<span class="text-gray-300 flex-1 mr-2 break-words" x-text="log.message || 'No message'"></span>
+<time :datetime="log.time" class="font-mono text-xs text-gray-500 whitespace-nowrap" x-text="formatLogTime(log.time)"></time>
+</div>
+</li>
+</template>
+</ul>
+</div>
+</section>
+</div>
+</div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+        function dashboardApp() {
+            return {
+                loading: false,
+                connectionStatus: 'connected',
+                retryCountdown: 5,
+                retryTimer: null,
+                toasts: [],
+                mobileMenuOpen: false,
+                refreshInterval: {{ settings.refresh_interval | default(30) }} * 1000,
+                pollingManager: null,
+                devices: [],
+                upsData: [],
+                logs: [],
+                batteryAnalytics: { predicted_time: 'Calculating...', history: [] },
+                deviceSearchInput: '',
+                deviceSearch: '',
+                logSearchInput: '',
+                logSearch: '',
+                wakingDevices: {},
+                theme: '{{ settings.theme if settings.theme else "dark" }}',
+                batteryChart: null,
+                chartInitialized: false,
+                sortableInstances: [],
+                
+                get filteredDevices() {
+                    if (!this.deviceSearch) return this.devices;
+                    const search = this.deviceSearch.toLowerCase();
+                    return this.devices.filter(device => 
+                        (device.name || '').toLowerCase().includes(search) ||
+                        (device.mac || '').toLowerCase().includes(search) ||
+                        (device.ip || '').toLowerCase().includes(search)
+                    );
+                },
+                
+                get filteredLogs() {
+                    if (!this.logs || this.logs.length === 0) {
+                        return [];
+                    }
+                    if (!this.logSearch || this.logSearch.trim() === '') {
+                        return this.logs;
+                    }
+                    const search = this.logSearch.toLowerCase();
+                    return this.logs.filter(log => {
+                        if (!log || typeof log !== 'object') return false;
+                        const message = log.message || '';
+                        return message.toLowerCase().includes(search);
+                    });
+                },
+                
+                get onlineDeviceCount() {
+                    return this.devices.filter(d => d.online).length;
+                },
+                
+                safeInit() {
+                    try {
+                        this.init();
+                    } catch (error) {
+                        console.error('Dashboard initialization failed:', error);
+                        this.showToast('Dashboard initialization failed', 'error');
+                    }
+                },
+                
+                init() {
+                    LumenTrace.ToastManager.setAlpineComponent(this);
+                    LumenTrace.ThemeManager.init(this.theme);
+                    this.pollingManager = new LumenTrace.PollingManager();
+                    
+                    this.debouncedSearch = LumenTrace.Utils.debounce(() => {
+                        this.deviceSearch = this.deviceSearchInput;
+                    }, 300);
+                    
+                    this.debouncedLogSearch = LumenTrace.Utils.debounce(() => {
+                        this.logSearch = this.logSearchInput;
+                    }, 300);
+                    
+                    this.$nextTick(() => {
+                        this.loading = true;
+                        this.refreshAll().then(() => {
+                            this.loading = false;
+                            this.devices.forEach(device => {
+                                this.wakingDevices[device.ip] = false;
+                            });
+                            this.startPolling();
+                            this.handleResizeForDragAndDrop();
+                            window.addEventListener('resize', this.handleResizeForDragAndDrop.bind(this));
+                        });
+                    });
+                    
+                    window.addEventListener('beforeunload', () => {
+                        this.cleanup();
+                    });
+                    
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) {
+                            this.pollingManager.pause();
+                        } else {
+                            this.pollingManager.resume();
+                            this.refreshAll();
+                        }
+                    });
+                },
+                
+                cleanup() {
+                    if (this.pollingManager) {
+                        this.pollingManager.destroy();
+                    }
+                    if (this.batteryChart) {
+                        this.batteryChart.destroy();
+                        this.batteryChart = null;
+                    }
+                    if (this.retryTimer) {
+                        clearInterval(this.retryTimer);
+                    }
+                    this.sortableInstances.forEach(sortable => sortable.destroy());
+                },
+                
+                toggleMobileSidebar() {
+                    this.mobileMenuOpen = !this.mobileMenuOpen;
+                    const button = document.querySelector('[aria-controls="mobile-sidebar"]');
+                    if (button) {
+                        button.setAttribute('aria-expanded', this.mobileMenuOpen);
+                    }
+                },
+                
+                handleEscape() {
+                    if (this.mobileMenuOpen) {
+                        this.toggleMobileSidebar();
+                    }
+                },
+                
+                setConnectionStatus(status) {
+                    this.connectionStatus = status;
+                    if (status === 'disconnected') {
+                        this.startRetryCountdown();
+                    } else {
+                        this.stopRetryCountdown();
+                    }
+                },
+                
+                startRetryCountdown() {
+                    this.retryCountdown = 5;
+                    this.retryTimer = setInterval(() => {
+                        this.retryCountdown--;
+                        if (this.retryCountdown <= 0) {
+                            this.retryConnection();
+                        }
+                    }, 1000);
+                },
+                
+                stopRetryCountdown() {
+                    if (this.retryTimer) {
+                        clearInterval(this.retryTimer);
+                        this.retryTimer = null;
+                    }
+                },
+                
+                async retryConnection() {
+                    this.stopRetryCountdown();
+                    this.setConnectionStatus('connecting');
+                    await this.refreshAll();
+                },
+                
+                async handleWakeDevice(device) {
+                    if (!device.mac) {
+                        this.showToast('No MAC address available for this device', 'error');
+                        return;
+                    }
+                    this.wakingDevices[device.ip] = true;
+                    try {
+                        const response = await fetch('/wake_device', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: JSON.stringify({ mac: device.mac })
+                        });
+                        const data = await response.json();
+                        if (response.ok && data.success) {
+                            this.showToast(data.message || `Wake-on-LAN packet sent to ${device.name}`, 'success');
+                            setTimeout(() => this.refreshDevices(), 5000);
+                            setTimeout(() => this.refreshDevices(), 10000);
+                        } else {
+                            throw new Error(data.message || 'Failed to send wake packet');
+                        }
+                    } catch (error) {
+                        console.error('Wake device error:', error);
+                        this.showToast(`Failed to wake ${device.name}: ${error.message}`, 'error');
+                        this.wakingDevices[device.ip] = false;
+                    }
+                },
+                
+                navigateToEdit(device) {
+                    const index = this.devices.findIndex(d => d.ip === device.ip);
+                    if (index !== -1) {
+                        window.location.href = `/edit_device/${index}`;
+                    }
+                },
+                
+                async refreshUpsStatus() {
+                    const result = await LumenTrace.APIUtils.get('/get_ups_status');
+                    if (result.success) {
+                        this.upsData = Array.isArray(result.data.ups_systems) ? result.data.ups_systems : [];
+                        return true;
+                    }
+                    return false;
+                },
+                
+                async refreshDevices() {
+                    const result = await LumenTrace.APIUtils.get('/get_devices');
+                    if (result.success) {
+                        this.devices = Array.isArray(result.data.devices) ? result.data.devices.map(device => ({
+                            name: device.name || 'Unknown Device',
+                            ip: device.ip || '',
+                            mac: device.mac || '',
+                            online: Boolean(device.online),
+                            last_seen: device.last_seen || null
+                        })) : [];
+                        return true;
+                    }
+                    return false;
+                },
+                
+                async refreshLogs() {
+                    const result = await LumenTrace.APIUtils.get('/get_logs');
+                    if (result.success) {
+                        this.logs = Array.isArray(result.data.logs) ? [...result.data.logs].reverse() : [];
+                        return true;
+                    }
+                    return false;
+                },
+                
+                async refreshBatteryAnalytics() {
+                    const result = await LumenTrace.APIUtils.get('/get_battery_analytics');
+                    if (result.success) {
+                        this.batteryAnalytics = result.data || { predicted_time: 'N/A', history: [] };
+                        this.updateBatteryChart(result.data);
+                        return true;
+                    }
+                    return false;
+                },
+
+                async refreshAll() {
+                    this.setConnectionStatus('connecting');
+                    try {
+                        const results = await Promise.allSettled([
+                            this.refreshUpsStatus(),
+                            this.refreshDevices(),
+                            this.refreshLogs(),
+                            this.refreshBatteryAnalytics()
+                        ]);
+
+                        const allFailed = results.every(res => res.status === 'fulfilled' && res.value === false);
+
+                        if (allFailed) {
+                            this.setConnectionStatus('disconnected');
+                        } else {
+                            this.setConnectionStatus('connected');
+                        }
+                    } catch (error) {
+                        console.error('Error during parallel refresh:', error);
+                        this.setConnectionStatus('disconnected');
+                    }
+                },
+                
+                updateBatteryChart(data) {
+                    if (!LumenTrace.Utils.isLibraryLoaded('Chart')) {
+                        console.warn('Chart.js not loaded');
+                        return;
+                    }
+                    const ctx = document.getElementById('battery-chart');
+                    if (!ctx) return;
+                    
+                    if (!data || !Array.isArray(data.history) || data.history.length === 0) {
+                        if (this.batteryChart) {
+                            this.batteryChart.destroy();
+                            this.batteryChart = null;
+                        }
+                        this.chartInitialized = false;
+                        this.batteryAnalytics.predicted_time = 'No data available';
+                        return;
+                    }
+                    
+                    const labels = data.history.map(h => LumenTrace.Utils.formatTime(h.timestamp));
+                    const chartData = data.history.map(h => h.battery);
+                    
+                    if (this.batteryChart) {
+                        this.batteryChart.data.labels = labels;
+                        this.batteryChart.data.datasets[0].data = chartData;
+                        this.batteryChart.update('none');
+                    } else {
+                        try {
+                            this.batteryChart = LumenTrace.Utils.createChart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels,
+                                    datasets: [{
+                                        label: 'Battery %',
+                                        data: chartData,
+                                        borderColor: '#4a90e2',
+                                        backgroundColor: 'rgba(74,144,226,0.2)',
+                                        tension: 0.4,
+                                        fill: true,
+                                        pointRadius: 2,
+                                        pointHoverRadius: 4
+                                    }]
+                                },
+                                options: {
+                                    responsive: true,
+                                    maintainAspectRatio: false,
+                                    interaction: {
+                                        intersect: false,
+                                        mode: 'index'
+                                    },
+                                    scales: {
+                                        y: {
+                                            min: 0,
+                                            max: 100,
+                                            ticks: { color: '#9ca3af', stepSize: 20 },
+                                            grid: { color: 'rgba(255,255,255,0.1)' }
+                                        },
+                                        x: {
+                                            ticks: { color: '#9ca3af', maxRotation: 0, autoSkip: true, maxTicksLimit: 6 },
+                                            grid: { display: false }
+                                        }
+                                    },
+                                    plugins: {
+                                        legend: { display: false },
+                                        tooltip: {
+                                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                            titleColor: '#fff',
+                                            bodyColor: '#fff',
+                                            borderColor: '#4a90e2',
+                                            borderWidth: 1,
+                                            displayColors: false,
+                                            callbacks: {
+                                                label: function(context) {
+                                                    return `Battery: ${context.parsed.y}%`;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                            
+                            if (this.batteryChart) {
+                                this.chartInitialized = true;
+                            }
+                        } catch (error) {
+                            console.error('Failed to create battery chart:', error);
+                            this.chartInitialized = false;
+                        }
+                    }
+                },
+                
+                startPolling() {
+                    this.pollingManager.start('ups', () => this.refreshUpsStatus(), this.refreshInterval);
+                    this.pollingManager.start('devices', () => this.refreshDevices(), this.refreshInterval * 2);
+                    this.pollingManager.start('analytics', () => this.refreshBatteryAnalytics(), this.refreshInterval * 5);
+                    this.pollingManager.start('logs', () => this.refreshLogs(), this.refreshInterval * 1.5);
+                },
+
+                handleResizeForDragAndDrop() {
+                    if (!LumenTrace.Utils.isLibraryLoaded('Sortable')) {
+                        return;
+                    }
+                    
+                    const enableDrag = window.innerWidth >= 1024;
+
+                    if (enableDrag && this.sortableInstances.length === 0) {
+                        const col1 = document.getElementById('widget-col-1');
+                        const col2 = document.getElementById('widget-col-2');
+                        
+                        if (col1 && col2) {
+                            const options = {
+                                group: 'dashboard-widgets',
+                                animation: 150,
+                                ghostClass: 'opacity-50',
+                                handle: '.draggable-header',
+                                forceFallback: true,
+                                fallbackOnBody: true,
+                                swapThreshold: 0.65,
+                                onEnd: () => this.saveWidgetPositions()
+                            };
+                            this.sortableInstances.push(new Sortable(col1, options));
+                            this.sortableInstances.push(new Sortable(col2, options));
+                            this.restoreWidgetPositions();
+                        }
+                    } else if (!enableDrag && this.sortableInstances.length > 0) {
+                        this.sortableInstances.forEach(instance => instance.destroy());
+                        this.sortableInstances = [];
+                    }
+                },
+                
+                saveWidgetPositions() {
+                    const positions = {};
+                    document.querySelectorAll('[data-widget-id]').forEach((widget, index) => {
+                        const id = widget.getAttribute('data-widget-id');
+                        const col = widget.parentElement.id;
+                        positions[id] = { col, index };
+                    });
+                    localStorage.setItem('lumentrace-widget-positions', JSON.stringify(positions));
+                },
+                
+                restoreWidgetPositions() {
+                    const saved = localStorage.getItem('lumentrace-widget-positions');
+                    if (!saved) return;
+                    
+                    try {
+                        const positions = JSON.parse(saved);
+                        const widgets = {};
+                        
+                        document.querySelectorAll('[data-widget-id]').forEach(widget => {
+                            const id = widget.getAttribute('data-widget-id');
+                            widgets[id] = widget;
+                        });
+                        
+                        Object.entries(positions)
+                            .sort((a, b) => a[1].index - b[1].index)
+                            .forEach(([id, { col }]) => {
+                                const widget = widgets[id];
+                                const column = document.getElementById(col);
+                                if (widget && column) {
+                                    column.appendChild(widget);
+                                }
+                            });
+                    } catch (error) {
+                        console.error('Failed to restore widget positions:', error);
+                    }
+                },
+                
+                showToast(message, type = 'info') {
+                    return LumenTrace.ToastManager.show(message, type);
+                },
+                
+                removeToast(id) {
+                    LumenTrace.ToastManager.remove(id);
+                },
+                
+                formatLastSeen(lastSeen) {
+                    if (!lastSeen) return 'Never';
+                    const date = new Date(lastSeen);
+                    const now = new Date();
+                    const diff = now - date;
+                    if (diff < 60000) return 'Just now';
+                    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                    return date.toLocaleDateString();
+                },
+                
+                formatLogTime(time) {
+                    try {
+                        const date = new Date(time);
+                        if (isNaN(date.getTime())) {
+                            return time;
+                        }
+                        return date.toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            second: '2-digit',
+                            hour12: true
+                        });
+                    } catch (error) {
+                        console.error('Error formatting time:', error, 'Original time:', time);
+                        return time;
+                    }
+                }
+            };
+        }
+    </script>
+{% endblock %}

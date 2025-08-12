@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  {% if csrf_token is defined %}<meta name="csrf-token" content="{{ csrf_token() }}">{% endif %}
+  <title>{% block title %}LumenTrace{% endblock %}</title>
+
+  <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/inter.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/custom-vars.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/light-theme.css') }}" rel="stylesheet">
+  {% block head %}{% endblock %}
+</head>
+<body x-data="shellApp()" @keydown.escape="mobileSidebarOpen=false"
+      class="bg-slate-950 text-gray-300 {% if settings and settings.theme == 'light' %}light-theme{% endif %} lumentrace-theme">
+
+  <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-slate-800 text-white px-3 py-1 rounded">Skip to content</a>
+
+  <!-- Desktop sidebar (fixed at lg+) -->
+  {% include "_sidebar.html" %}
+
+  <!-- Page content -->
+  <main id="main" role="main" class="min-h-screen p-4 lg:p-8 lg:ml-64">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="{{ url_for('static', filename='js/chart.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/Sortable.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/alpine.min.js') }}"></script>
+  {% block scripts %}{% endblock %}
+
+  <script>
+    window.shellApp = function () {
+      return {
+        mobileSidebarOpen: false,
+        toggleMobileSidebar(){ this.mobileSidebarOpen = !this.mobileSidebarOpen },
+        closeMobileSidebar(){ this.mobileSidebarOpen = false },
+      };
+    };
+  </script>
+</body>
+</html>

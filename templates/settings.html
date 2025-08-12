@@ -1,0 +1,811 @@
+{% extends "_base.html" %}
+{% block title %}Settings - LumenTrace{% endblock %}
+{% block head %}
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        .transition-height {
+            transition: height 0.3s ease-in-out;
+        }
+        
+        .edit-mode-enter {
+            animation: editModeEnter 0.2s ease-out;
+        }
+        
+        @keyframes editModeEnter {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<div x-data="settingsApp()" x-init="safeInit()" @keydown.escape="handleEscape">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<header class="mb-8">
+<h1 class="text-3xl font-bold text-gray-200">Application Settings</h1>
+<p class="text-gray-400 mt-1">Configure general, network, and UPS monitoring options.</p>
+</header>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            <div id="flash-messages" style="display: none;">
+                                {% for category, message in messages %}
+                                    <div data-message="{{ message }}" data-type="{{ category }}"></div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+
+                    <section aria-labelledby="ups-section-title" class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors mb-8">
+<h2 class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3" id="ups-section-title">
+                            UPS Systems
+                            <span class="text-sm font-normal text-gray-400 ml-3">
+<span x-text="upsSystems.length"></span> configured
+                            </span>
+</h2>
+<div class="mb-8" x-show="upsSystems.length &gt; 0">
+<div class="overflow-x-auto rounded-lg border border-slate-700">
+<table class="w-full text-left bg-slate-800/50" role="table">
+<thead class="border-b border-slate-700 bg-slate-800">
+<tr role="row">
+<th class="p-4 font-semibold text-sm text-gray-400" role="columnheader">UPS Name</th>
+<th class="p-4 font-semibold text-sm text-gray-400" role="columnheader">NUT IP Address</th>
+<th class="p-4 font-semibold text-sm text-gray-400" role="columnheader">Port</th>
+<th class="p-4 font-semibold text-sm text-center text-gray-400" role="columnheader">Status</th>
+<th class="p-4 font-semibold text-sm text-center text-gray-400" role="columnheader">Actions</th>
+</tr>
+</thead>
+<tbody role="rowgroup">
+<template :key="ups.id" x-for="ups in upsSystems">
+<tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-800/30 transition-colors" role="row">
+<template x-if="editingUpsId !== ups.id">
+<td class="p-4" role="gridcell">
+<div class="font-semibold text-white" x-text="ups.name"></div>
+</td>
+</template>
+<template x-if="editingUpsId !== ups.id">
+<td class="p-4" role="gridcell">
+<code class="font-mono text-sm text-gray-400" x-text="ups.ip"></code>
+</td>
+</template>
+<template x-if="editingUpsId !== ups.id">
+<td class="p-4" role="gridcell">
+<code class="font-mono text-sm text-gray-400" x-text="ups.port"></code>
+</td>
+</template>
+<template x-if="editingUpsId === ups.id">
+<td class="p-4" role="gridcell">
+<div class="edit-mode-enter">
+<input :aria-describedby="editValidationErrors.name ? 'edit-name-error' : null" :class="editValidationErrors.name ? 'border-red-500 focus:border-red-500' : ''" @keydown.enter="saveEditUps(ups.id)" @keydown.escape="cancelEditUps" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all" placeholder="UPS Name" type="text" x-model="editingUps.name"/>
+<p class="mt-1 text-sm text-red-400" id="edit-name-error" role="alert" x-show="editValidationErrors.name" x-text="editValidationErrors.name"></p>
+</div>
+</td>
+</template>
+<template x-if="editingUpsId === ups.id">
+<td class="p-4" role="gridcell">
+<div class="edit-mode-enter">
+<input :aria-describedby="editValidationErrors.ip ? 'edit-ip-error' : null" :class="editValidationErrors.ip ? 'border-red-500 focus:border-red-500' : ''" @keydown.enter="saveEditUps(ups.id)" @keydown.escape="cancelEditUps" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all font-mono" pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$" placeholder="192.168.1.10" type="text" x-model="editingUps.ip"/>
+<p class="mt-1 text-sm text-red-400" id="edit-ip-error" role="alert" x-show="editValidationErrors.ip" x-text="editValidationErrors.ip"></p>
+</div>
+</td>
+</template>
+<template x-if="editingUpsId === ups.id">
+<td class="p-4" role="gridcell">
+<div class="edit-mode-enter">
+<input :aria-describedby="editValidationErrors.port ? 'edit-port-error' : null" :class="editValidationErrors.port ? 'border-red-500 focus:border-red-500' : ''" @keydown.enter="saveEditUps(ups.id)" @keydown.escape="cancelEditUps" class="w-full p-2 rounded-md border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all" max="65535" min="1" placeholder="3493" type="number" x-model.number="editingUps.port"/>
+<p class="mt-1 text-sm text-red-400" id="edit-port-error" role="alert" x-show="editValidationErrors.port" x-text="editValidationErrors.port"></p>
+</div>
+</td>
+</template>
+<td class="p-4 text-center" role="gridcell">
+<span :aria-label="`UPS ${ups.name} status: ${getUpsStatus(ups.id)}`" :class="{
+                                                              'bg-green-500/20 text-green-300': getUpsStatus(ups.id) === 'connected',
+                                                              'bg-red-500/20 text-red-300': getUpsStatus(ups.id) === 'failed',
+                                                              'bg-gray-500/20 text-gray-400': getUpsStatus(ups.id) === 'unknown',
+                                                              'bg-yellow-500/20 text-yellow-300': getUpsStatus(ups.id) === 'testing'
+                                                          }" class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full" role="status">
+<span :class="{
+                                                                  'bg-green-500': getUpsStatus(ups.id) === 'connected',
+                                                                  'bg-red-500': getUpsStatus(ups.id) === 'failed',
+                                                                  'bg-gray-500': getUpsStatus(ups.id) === 'unknown',
+                                                                  'bg-yellow-500 animate-pulse': getUpsStatus(ups.id) === 'testing'
+                                                              }" class="w-1.5 h-1.5 rounded-full mr-1.5"></span>
+<span x-text="{
+                                                            'connected': 'Connected',
+                                                            'failed': 'Failed',
+                                                            'unknown': 'Unknown',
+                                                            'testing': 'Testing...'
+                                                        }[getUpsStatus(ups.id)] || 'Unknown'"></span>
+</span>
+</td>
+<td class="p-4 text-center" role="gridcell">
+<div class="flex items-center justify-center space-x-2">
+<template x-if="editingUpsId !== ups.id">
+<button :aria-label="`Test connection for ${ups.name}`" :disabled="loading || testingUps[ups.id]" @click="testUpsConnection(ups.id)" class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+<span x-show="!testingUps[ups.id]">Test</span>
+<span x-show="testingUps[ups.id]">Testing...</span>
+</button>
+</template>
+<template x-if="editingUpsId !== ups.id">
+<button :aria-label="`Edit ${ups.name}`" @click="startEditUps(ups.id)" class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors focus-visible">
+                                                                Edit
+                                                            </button>
+</template>
+<template x-if="editingUpsId !== ups.id">
+<button :aria-label="`Remove ${ups.name}`" :disabled="removingUps[ups.id]" @click="removeUps(ups.id, ups.name)" class="px-3 py-1 rounded-md text-sm border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+<span x-show="!removingUps[ups.id]">Remove</span>
+<span x-show="removingUps[ups.id]">Removing...</span>
+</button>
+</template>
+<template x-if="editingUpsId === ups.id">
+<button :aria-label="'Save changes'" :disabled="loading" @click="saveEditUps(ups.id)" class="px-3 py-1 rounded-md text-sm bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+                                                                Save
+                                                            </button>
+</template>
+<template x-if="editingUpsId === ups.id">
+<button :aria-label="'Cancel editing'" @click="cancelEditUps()" class="px-3 py-1 rounded-md text-sm border border-gray-500/50 text-gray-400 hover:bg-gray-500/10 transition-colors focus-visible">
+                                                                Cancel
+                                                            </button>
+</template>
+</div>
+</td>
+</tr>
+</template>
+</tbody>
+</table>
+</div>
+</div>
+<div class="text-center py-8 mb-8" x-show="upsSystems.length === 0">
+<svg aria-hidden="true" class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<p class="text-gray-500 mb-4">No UPS systems configured yet</p>
+<p class="text-sm text-gray-600">Add your first UPS below to start monitoring power status</p>
+</div>
+<div class="border-t border-slate-700 pt-6">
+<h3 class="text-xl font-semibold text-gray-200 mb-5">Add New UPS</h3>
+<form @submit.prevent="submitUpsForm" class="space-y-6">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="ups_name">
+                                            UPS Name
+                                            <span class="text-red-400">*</span>
+</label>
+<input :aria-describedby="validationErrors.name ? 'ups-name-error' : null" :class="validationErrors.name ? 'border-red-500 focus:border-red-500' : ''" class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="ups_name" placeholder="e.g., Main UPS" required="" type="text" x-model="newUps.name"/>
+<p class="mt-1 text-sm text-red-400" id="ups-name-error" role="alert" x-show="validationErrors.name" x-text="validationErrors.name"></p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="ups_ip">
+                                            NUT Server IP
+                                            <span class="text-red-400">*</span>
+</label>
+<input :aria-describedby="validationErrors.ip ? 'ups-ip-error' : null" :class="validationErrors.ip ? 'border-red-500 focus:border-red-500' : ''" class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono" id="ups_ip" pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$" placeholder="192.168.1.10" required="" type="text" x-model="newUps.ip"/>
+<p class="mt-1 text-sm text-red-400" id="ups-ip-error" role="alert" x-show="validationErrors.ip" x-text="validationErrors.ip"></p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="ups_port">
+                                            Port
+                                            <span class="text-red-400">*</span>
+</label>
+<input :aria-describedby="validationErrors.port ? 'ups-port-error' : null" :class="validationErrors.port ? 'border-red-500 focus:border-red-500' : ''" class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="ups_port" max="65535" min="1" required="" type="number" x-model.number="newUps.port"/>
+<p class="mt-1 text-sm text-red-400" id="ups-port-error" role="alert" x-show="validationErrors.port" x-text="validationErrors.port"></p>
+<p class="mt-1 text-sm text-gray-500">Default NUT port is 3493</p>
+</div>
+</div>
+<div class="flex justify-end">
+<button :disabled="loading || isAddingUps || !isValidUpsForm()" class="flex items-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all focus-visible" type="submit">
+<svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span x-text="loading || isAddingUps ? 'Adding...' : 'Add UPS'"></span>
+</button>
+</div>
+</form>
+</div>
+</section>
+<section aria-labelledby="general-section-title" class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
+<form @submit.prevent="submitGeneralSettings">
+<div class="space-y-8">
+<fieldset>
+<legend class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3" id="general-section-title">General Settings</legend>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="refresh_interval">
+                                                Dashboard Refresh Interval
+                                                <span class="text-gray-500">(seconds)</span>
+</label>
+<input class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="refresh_interval" max="300" min="5" required="" type="number" x-model.number="generalSettings.refresh_interval"/>
+<p class="mt-1 text-sm text-gray-500">How often the dashboard updates (5-300 seconds)</p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="log_retention">
+                                                Log Retention
+                                                <span class="text-gray-500">(number of entries)</span>
+</label>
+<input class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="log_retention" max="1000" min="10" required="" type="number" x-model.number="generalSettings.log_retention"/>
+<p class="mt-1 text-sm text-gray-500">Maximum number of log entries to keep (10-1000)</p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="wol_battery_threshold">
+                                                WOL Battery Threshold
+                                                <span class="text-gray-500">(%)</span>
+</label>
+<input class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="wol_battery_threshold" max="100" min="0" required="" type="number" x-model.number="generalSettings.wol_battery_threshold"/>
+<p class="mt-1 text-sm text-gray-500">Minimum battery level before sending Wake-on-LAN packets</p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="verbose_logging">Verbose Logging</label>
+<select class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="verbose_logging" x-model="generalSettings.verbose_logging">
+<option value="false">Disabled</option>
+<option value="true">Enabled</option>
+</select>
+<p class="mt-1 text-sm text-gray-500">Log routine events like periodic status checks</p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="theme">
+                                                Theme
+                                            </label>
+<select @change="onThemeChange" class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="theme" x-model="generalSettings.theme">
+<option value="dark">Dark</option>
+<option value="light">Light</option>
+</select>
+<p class="mt-1 text-sm text-gray-500">Choose between dark and light theme</p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="density">
+                                                UI Density
+                                            </label>
+<select class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="density" x-model="generalSettings.density">
+<option value="compact">Compact</option>
+<option value="comfortable">Comfortable</option>
+<option value="spacious">Spacious</option>
+</select>
+<p class="mt-1 text-sm text-gray-500">Adjust spacing and padding throughout the UI</p>
+</div>
+</div>
+</fieldset>
+<fieldset>
+<legend class="text-2xl font-bold text-gray-200 mb-6 border-b border-slate-700 pb-3">Network Discovery</legend>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="ip_scan_range">
+                                                IP Scan Range
+                                                <span class="text-gray-500">(CIDR notation)</span>
+</label>
+<input :class="!isValidCIDR(generalSettings.ip_scan_range) &amp;&amp; generalSettings.ip_scan_range ? 'border-red-500' : ''" class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono" id="ip_scan_range" pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/(?:[0-9]|[1-2][0-9]|3[0-2]))?$" placeholder="192.168.1.0/24" required="" type="text" x-model="generalSettings.ip_scan_range"/>
+<p class="mt-1 text-sm text-gray-500">Network range for device discovery (e.g., 192.168.1.0/24)</p>
+<p class="mt-1 text-sm text-red-400" x-show="!isValidCIDR(generalSettings.ip_scan_range) &amp;&amp; generalSettings.ip_scan_range">Invalid CIDR format</p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="discovery_timeout">
+                                                Discovery Timeout
+                                                <span class="text-gray-500">(seconds)</span>
+</label>
+<input class="w-full p-3 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="discovery_timeout" max="30" min="1" required="" type="number" x-model.number="generalSettings.discovery_timeout"/>
+<p class="mt-1 text-sm text-gray-500">How long to wait for device responses during discovery (1-30 seconds)</p>
+</div>
+</div>
+</fieldset>
+<div class="pt-6 border-t border-slate-700">
+<div class="flex items-center justify-between">
+<p class="text-sm text-yellow-400" x-show="hasSettingsChanges()">
+<svg class="w-4 h-4 inline mr-1" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" fill-rule="evenodd"></path>
+</svg>
+                                            You have unsaved changes
+                                        </p>
+<button :disabled="loading || isSavingSettings || !isValidSettingsForm()" class="flex items-center px-8 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all focus-visible" type="submit">
+<svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span x-text="loading || isSavingSettings ? 'Saving...' : 'Save Settings'"></span>
+</button>
+</div>
+</div>
+</div>
+</form>
+</section>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+        function settingsApp() {
+            return {
+                // State management
+                loading: false,
+                loadingMessage: 'Loading...',
+                isAddingUps: false,
+                isSavingSettings: false,
+                toasts: [],
+                mobileMenuOpen: false,
+                
+                // UPS management
+                upsSystems: [],
+                upsStatuses: {},
+                testingUps: {},
+                removingUps: {},
+                
+                editingUpsId: null,
+                editingUps: {},
+                editValidationErrors: {},
+                
+                newUps: {
+                    name: '',
+                    ip: '',
+                    port: 3493
+                },
+                
+                // Settings
+                generalSettings: {
+                    refresh_interval: {{ settings.refresh_interval }},
+                    log_retention: {{ settings.log_retention }},
+                    ip_scan_range: '{{ settings.ip_scan_range }}',
+                    discovery_timeout: {{ settings.discovery_timeout }},
+                    wol_battery_threshold: {{ settings.wol_battery_threshold }},
+                    verbose_logging: '{{ settings.verbose_logging | string | lower }}',
+                    theme: '{{ settings.theme if settings.theme else "dark" }}',
+                    density: '{{ settings.density if settings.density else "comfortable" }}'
+                },
+                
+                // Original settings for change detection
+                originalSettings: null,
+                
+                // Validation
+                validationErrors: {},
+                validationRules: {
+                    ups: {
+                        name: {
+                            required: true,
+                            requiredMessage: 'UPS name is required',
+                            min: 1,
+                            max: 100,
+                            maxMessage: 'UPS name must be no more than 100 characters',
+                             custom: function(value, data) {
+                                return null;
+                            }
+                        },       
+
+                        ip: {
+                            required: true,
+                            requiredMessage: 'IP address is required',
+                            pattern: LumenTrace.CONSTANTS.VALIDATION.IP_PATTERN,
+                            patternMessage: 'Please enter a valid IP address'
+                        },
+                        port: {
+                            required: true,
+                            requiredMessage: 'Port is required',
+                            custom: (value) => {
+                                const port = parseInt(value);
+                                if (!port || port < 1 || port > 65535) {
+                                    return 'Port must be between 1 and 65535';
+                                }
+                                return null;
+                            }
+                        }
+                    }
+                },
+                
+                // Initialization
+                safeInit() {
+                    try {
+                        this.init();
+                    } catch (error) {
+                        console.error('Settings initialization failed:', error);
+                        this.showToast('Initialization failed', 'error');
+                    }
+                },
+                
+                init() {
+                    // Set toast manager reference
+                    LumenTrace.ToastManager.setAlpineComponent(this);
+                    
+                    // Initialize theme
+                    LumenTrace.ThemeManager.init(this.generalSettings.theme);
+                    
+                    // Store original settings
+                    this.originalSettings = JSON.parse(JSON.stringify(this.generalSettings));
+
+                    // Set up the custom validation function with proper context
+                    this.validationRules.ups.name.custom = (value, data) => {
+                        const normalizedValue = value.trim().toLowerCase();
+                        const exists = this.upsSystems.some(ups => 
+                            ups.id !== this.editingUpsId && 
+                            ups.name.toLowerCase() === normalizedValue
+                        );
+                        return exists ? 'UPS name already exists' : null;
+                    };
+                    
+                    // Process UPS systems
+                    const upsConfigs = {{ settings.ups_configs | tojson | safe }};
+                    this.upsSystems = Array.isArray(upsConfigs) ? upsConfigs.map(ups => ({
+                        ...ups,
+                        id: ups.id || LumenTrace.Utils.generateId()
+                    })) : [];
+                    
+                    // Initialize UPS statuses
+                    this.initializeUpsStatuses();
+                    
+                    // Process flash messages
+                    this.processFlashMessages();
+                    
+                    // Check UPS statuses after a short delay
+                    setTimeout(() => {
+                        this.checkAllUpsStatuses();
+                    }, 1000);
+                    
+                    // Focus first input
+                    this.$nextTick(() => {
+                        const firstInput = document.querySelector('input:not([type="hidden"])');
+                        if (firstInput) firstInput.focus();
+                    });
+                },
+                
+                initializeUpsStatuses() {
+                    this.upsSystems.forEach((ups) => {
+                        this.upsStatuses[ups.id] = 'unknown';
+                        this.testingUps[ups.id] = false;
+                        this.removingUps[ups.id] = false;
+                    });
+                },
+                
+                getUpsStatus(upsId) {
+                    return this.upsStatuses[upsId] || 'unknown';
+                },
+                
+                // Flash message processing
+                processFlashMessages() {
+                    const flashContainer = document.getElementById('flash-messages');
+                    if (flashContainer) {
+                        const messages = flashContainer.querySelectorAll('div[data-type]');
+                        messages.forEach(msg => {
+                            const type = msg.getAttribute('data-type');
+                            const message = msg.getAttribute('data-message');
+                            this.showToast(message, type === 'error' ? 'error' : 'success');
+                        });
+                    }
+                },
+                
+                // Mobile menu
+                toggleMobileSidebar() {
+                    this.mobileMenuOpen = !this.mobileMenuOpen;
+                    const button = document.querySelector('[aria-controls="mobile-sidebar"]');
+                    if (button) {
+                        button.setAttribute('aria-expanded', this.mobileMenuOpen);
+                    }
+                },
+                
+                handleEscape() {
+                    if (this.mobileMenuOpen) {
+                        this.toggleMobileSidebar();
+                    } else if (this.editingUpsId) {
+                        this.cancelEditUps();
+                    }
+                },
+                
+                // Theme handling
+                onThemeChange() {
+                    LumenTrace.ThemeManager.set(this.generalSettings.theme);
+                },
+                
+                // Validation helpers
+                isValidUpsForm() {
+                    return this.newUps.name.trim() && 
+                           LumenTrace.Utils.validateIP(this.newUps.ip) && 
+                           this.newUps.port >= 1 && 
+                           this.newUps.port <= 65535;
+                },
+                
+                isValidSettingsForm() {
+                    return this.generalSettings.refresh_interval >= 5 && 
+                           this.generalSettings.refresh_interval <= 300 &&
+                           this.generalSettings.log_retention >= 10 && 
+                           this.generalSettings.log_retention <= 1000 &&
+                           this.generalSettings.discovery_timeout >= 1 && 
+                           this.generalSettings.discovery_timeout <= 30 &&
+                           this.isValidCIDR(this.generalSettings.ip_scan_range);
+                },
+                
+                isValidCIDR(cidr) {
+                    return LumenTrace.Utils.validateCIDR(cidr);
+                },
+                
+                hasSettingsChanges() {
+                    return JSON.stringify(this.generalSettings) !== JSON.stringify(this.originalSettings);
+                },
+                
+                // UPS testing
+                async testUpsConnection(upsId) {
+                    const ups = this.upsSystems.find(u => u.id === upsId);
+                    if (!ups || this.testingUps[upsId]) return;
+                    
+                    this.testingUps[upsId] = true;
+                    this.upsStatuses[upsId] = 'testing';
+                    
+                    try {
+                        const response = await fetch('/api/ups/test', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: JSON.stringify({
+                                id: ups.id,
+                                name: ups.name,
+                                ip: ups.ip,
+                                port: ups.port
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            this.upsStatuses[upsId] = data.success ? 'connected' : 'failed';
+                            
+                            if (!data.success) {
+                                this.showToast(`${ups.name} connection failed: ${data.message || 'Unknown error'}`, 'error');
+                            } else {
+                                this.showToast(`${ups.name} is connected and responding!`, 'success');
+                            }
+                        } else {
+                            throw new Error(data.message || 'Test failed');
+                        }
+                    } catch (error) {
+                        console.error('Error testing UPS:', error);
+                        this.upsStatuses[upsId] = 'failed';
+                        this.showToast(`Failed to test ${ups.name}: ${error.message}`, 'error');
+                    }
+                    
+                    this.testingUps[upsId] = false;
+                },
+                
+                async checkAllUpsStatuses() {
+                    const result = await LumenTrace.APIUtils.get('/get_ups_status');
+                    
+                    if (result.success && result.data.ups_systems) {
+                        this.upsSystems.forEach((ups) => {
+                            const upsFound = result.data.ups_systems.find(u => 
+                                u.name === ups.name || (u.ip === ups.ip && u.port === ups.port)
+                            );
+                            this.upsStatuses[ups.id] = upsFound ? 'connected' : 'failed';
+                        });
+                    }
+                },
+                
+                // UPS CRUD operations
+                async submitUpsForm() {
+                    if (this.isAddingUps || !this.isValidUpsForm()) return;
+                    
+                    this.validationErrors = {};
+                    
+                    // Validate form
+                    const validation = LumenTrace.FormUtils.validate(this.newUps, this.validationRules.ups);
+                    if (!validation.isValid) {
+                        this.validationErrors = validation.errors;
+                        this.showToast('Please fix the validation errors', 'error');
+                        return;
+                    }
+                    
+                    this.isAddingUps = true;
+                    this.loading = true;
+                    this.loadingMessage = 'Adding UPS...';
+                    
+                    try {
+                        // Create a proper FormData that matches what settings.py expects
+                        const formData = new FormData();
+                        formData.append('action', 'add_ups');
+                        formData.append('ups_name', this.newUps.name.trim());
+                        formData.append('ups_ip', this.newUps.ip.trim());
+                        formData.append('ups_port', this.newUps.port.toString());
+                        
+                        const response = await fetch('/settings', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: formData
+                        });
+                        
+                        // Settings.py returns a redirect on success, not JSON
+                        if (response.redirected || response.ok) {
+                            // Just reload the page to see the new UPS
+                            window.location.reload();
+                        } else {
+                            throw new Error('Failed to add UPS');
+                        }
+                    } catch (error) {
+                        console.error('Error adding UPS:', error);
+                        this.showToast('Failed to add UPS. Please try again.', 'error');
+                    }
+                    
+                    this.isAddingUps = false;
+                    this.loading = false;
+                },
+                
+                async removeUps(upsId, name) {
+                    if (this.removingUps[upsId]) return;
+                    
+                    if (!confirm(`Are you sure you want to remove the UPS "${name}"? This action cannot be undone.`)) {
+                        return;
+                    }
+                    
+                    this.removingUps[upsId] = true;
+                    
+                    const result = await LumenTrace.APIUtils.delete(`/api/ups/${encodeURIComponent(upsId)}`);
+                    
+                    if (result.success) {
+                        const index = this.upsSystems.findIndex(ups => ups.id === upsId);
+                        if (index > -1) {
+                            this.upsSystems.splice(index, 1);
+                        }
+                        
+                        // Clean up state
+                        delete this.upsStatuses[upsId];
+                        delete this.testingUps[upsId];
+                        delete this.removingUps[upsId];
+                        
+                        this.showToast('UPS removed successfully!', 'success');
+                    } else {
+                        this.removingUps[upsId] = false;
+                    }
+                },
+                
+                startEditUps(upsId) {
+                    const ups = this.upsSystems.find(u => u.id === upsId);
+                    if (!ups) return;
+                    
+                    this.editingUpsId = upsId;
+                    this.editingUps = { ...ups };
+                    this.editValidationErrors = {};
+                    
+                    // Focus first input after render
+                    this.$nextTick(() => {
+                        const firstInput = document.querySelector(`[role="gridcell"] input`);
+                        if (firstInput) firstInput.focus();
+                    });
+                },
+                
+                cancelEditUps() {
+                    this.editingUpsId = null;
+                    this.editingUps = {};
+                    this.editValidationErrors = {};
+                },
+                
+                async saveEditUps(upsId) {
+                    this.editValidationErrors = {};
+                    
+                    // Validate form
+                    const validation = LumenTrace.FormUtils.validate(this.editingUps, this.validationRules.ups);
+                    if (!validation.isValid) {
+                        this.editValidationErrors = validation.errors;
+                        return;
+                    }
+                    
+                    this.loading = true;
+                    this.loadingMessage = 'Updating UPS...';
+                    
+                    try {
+                        const response = await fetch(`/api/ups/${encodeURIComponent(upsId)}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: JSON.stringify({
+                                name: this.editingUps.name.trim(),
+                                ip: this.editingUps.ip.trim(),
+                                port: parseInt(this.editingUps.port)
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                            const index = this.upsSystems.findIndex(ups => ups.id === upsId);
+                            if (index > -1) {
+                                this.upsSystems[index] = { 
+                                    ...this.editingUps, 
+                                    id: upsId,
+                                    port: parseInt(this.editingUps.port) 
+                                };
+                            }
+                            
+                            this.cancelEditUps();
+                            this.showToast('UPS configuration updated successfully!', 'success');
+                            
+                            // Re-test connection
+                            setTimeout(() => {
+                                this.testUpsConnection(upsId);
+                            }, 500);
+                        } else {
+                            throw new Error(data.message || 'Failed to update UPS');
+                        }
+                    } catch (error) {
+                        console.error('Error updating UPS:', error);
+                        this.showToast(error.message || 'Failed to update UPS configuration', 'error');
+                    }
+                    
+                    this.loading = false;
+                },
+                
+                // General settings
+                async submitGeneralSettings() {
+                    if (this.isSavingSettings || !this.isValidSettingsForm()) return;
+                    
+                    this.isSavingSettings = true;
+                    this.loading = true;
+                    this.loadingMessage = 'Saving settings...';
+                    
+                    try {
+                        const response = await fetch('/api/settings', {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: JSON.stringify({
+                                refresh_interval: parseInt(this.generalSettings.refresh_interval),
+                                log_retention: parseInt(this.generalSettings.log_retention),
+                                ip_scan_range: this.generalSettings.ip_scan_range,
+                                discovery_timeout: parseInt(this.generalSettings.discovery_timeout),
+                                wol_battery_threshold: parseInt(this.generalSettings.wol_battery_threshold),
+                                verbose_logging: this.generalSettings.verbose_logging,
+                                theme: this.generalSettings.theme,
+                                density: this.generalSettings.density
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                            this.originalSettings = JSON.parse(JSON.stringify(this.generalSettings));
+                            this.showToast('Settings saved successfully!', 'success');
+                            
+                            // Apply theme change immediately
+                            LumenTrace.ThemeManager.set(this.generalSettings.theme);
+                            
+                            // Apply density change
+                            document.body.classList.remove('compact', 'comfortable', 'spacious');
+                            document.body.classList.add(this.generalSettings.density);
+                        } else {
+                            throw new Error(data.message || 'Failed to save settings');
+                        }
+                    } catch (error) {
+                        console.error('Error saving settings:', error);
+                        this.showToast(error.message || 'Failed to save settings', 'error');
+                    }
+                    
+                    this.isSavingSettings = false;
+                    this.loading = false;
+                },
+                
+                // Toast management
+                showToast(message, type = 'info') {
+                    return LumenTrace.ToastManager.show(message, type);
+                },
+                
+                removeToast(id) {
+                    LumenTrace.ToastManager.remove(id);
+                }
+            };
+        }
+    </script>
+{% endblock %}

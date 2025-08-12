@@ -1,0 +1,624 @@
+{% extends "_base.html" %}
+{% block title %}Edit Device - LumenTrace{% endblock %}
+{% block head %}
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+        
+        input, select, textarea {
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+        
+        .status-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        
+        .changed-field {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-color: #3b82f6 !important;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<div x-data="editDeviceApp()" x-init="safeInit()" @keydown.escape="handleEscape">
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<header class="mb-8">
+<div class="flex items-center gap-3 mb-2">
+<a aria-label="Back to dashboard" class="text-gray-400 hover:text-white transition-colors focus-visible rounded-md p-1" href="{{ url_for('dashboard.dashboard') }}">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</a>
+<h1 class="text-3xl font-bold text-gray-200">Edit Device</h1>
+</div>
+<p class="text-gray-400">Update the details for {{ device.name }}.</p>
+</header>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            <div id="flash-messages" style="display: none;">
+                                {% for category, message in messages %}
+                                    <div data-message="{{ message }}" data-type="{{ category }}"></div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+
+                    <div class="mb-6 p-6 rounded-lg bg-slate-900/30 border border-slate-800">
+<h3 class="text-lg font-semibold text-gray-200 mb-3">Current Device Status</h3>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+<div>
+<span class="text-gray-500">Status:</span>
+<span :class="{
+                                          'text-green-400': deviceStatus === 'online',
+                                          'text-red-400': deviceStatus === 'offline',
+                                          'text-gray-400': deviceStatus === 'unknown'
+                                      }" class="ml-2 font-medium">
+<span class="inline-flex items-center">
+<span :class="{
+                                                  'bg-green-500 status-pulse': deviceStatus === 'online',
+                                                  'bg-red-500': deviceStatus === 'offline',
+                                                  'bg-gray-500': deviceStatus === 'unknown'
+                                              }" class="w-2 h-2 rounded-full mr-2"></span>
+<span x-text="deviceStatus === 'online' ? 'Online' : deviceStatus === 'offline' ? 'Offline' : 'Unknown'"></span>
+</span>
+</span>
+</div>
+<div>
+<span class="text-gray-500">Last seen:</span>
+<span class="ml-2 font-medium text-gray-300" x-text="lastSeen || 'Never'"></span>
+</div>
+</div>
+<div class="mt-4 flex gap-3">
+<button :disabled="checkingStatus" @click="checkDeviceStatus" class="px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+<span x-show="!checkingStatus">Refresh Status</span>
+<span class="flex items-center" x-show="checkingStatus">
+<div class="loading-spinner w-3 h-3 mr-2 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                                    Checking...
+                                </span>
+</button>
+<button :disabled="wakingDevice" @click="wakeDevice" class="px-3 py-1 rounded-md text-sm border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible" x-show="deviceStatus === 'offline' &amp;&amp; formData.mac">
+<span x-show="!wakingDevice">Wake Device</span>
+<span x-show="wakingDevice">Waking...</span>
+</button>
+</div>
+</div>
+<div class="p-8 rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors">
+<form @submit.prevent="submitForm" class="space-y-6">
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="name">
+                                    Device Name
+                                    <span class="text-red-400">*</span>
+</label>
+<div class="relative">
+<input :aria-describedby="validationErrors.name ? 'name-error' : 'name-hint'" :aria-invalid="validationErrors.name ? 'true' : 'false'" :class="{
+                                               'border-red-500 focus:border-red-500': validationErrors.name,
+                                               'border-green-500': formData.name &amp;&amp; !validationErrors.name,
+                                               'changed-field': hasFieldChanged('name')
+                                           }" @blur="validateField('name')" @input="onFieldChange('name')" autocomplete="off" class="w-full p-3 pr-10 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" id="name" placeholder="e.g., Gaming PC, Office Printer" required="" type="text" x-model="formData.name"/>
+<div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+<svg class="w-5 h-5 text-green-500" fill="currentColor" viewbox="0 0 20 20" x-show="formData.name &amp;&amp; !validationErrors.name">
+<path clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<svg class="w-5 h-5 text-red-500" fill="currentColor" viewbox="0 0 20 20" x-show="validationErrors.name">
+<path clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" fill-rule="evenodd"></path>
+</svg>
+</div>
+</div>
+<p class="mt-1 text-sm text-red-400" id="name-error" role="alert" x-show="validationErrors.name" x-text="validationErrors.name"></p>
+<p class="mt-1 text-sm text-blue-400" x-show="!validationErrors.name &amp;&amp; hasFieldChanged('name')">
+                                    Was: <span x-text="originalData.name"></span>
+</p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="ip">
+                                    IP Address
+                                    <span class="text-red-400">*</span>
+</label>
+<div class="relative">
+<input :aria-describedby="validationErrors.ip ? 'ip-error' : 'ip-hint'" :aria-invalid="validationErrors.ip ? 'true' : 'false'" :class="{
+                                               'border-red-500 focus:border-red-500': validationErrors.ip,
+                                               'border-green-500': isValidIP &amp;&amp; !validationErrors.ip,
+                                               'changed-field': hasFieldChanged('ip')
+                                           }" @blur="validateField('ip')" @input="onIpChange" autocomplete="off" class="w-full p-3 pr-10 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono" id="ip" pattern="^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$" placeholder="e.g., 192.168.1.100" required="" type="text" x-model="formData.ip"/>
+<div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+<svg class="w-5 h-5 text-green-500" fill="currentColor" viewbox="0 0 20 20" x-show="isValidIP &amp;&amp; !validationErrors.ip">
+<path clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<svg class="w-5 h-5 text-red-500" fill="currentColor" viewbox="0 0 20 20" x-show="validationErrors.ip">
+<path clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" fill-rule="evenodd"></path>
+</svg>
+</div>
+</div>
+<p class="mt-1 text-sm text-red-400" id="ip-error" role="alert" x-show="validationErrors.ip" x-text="validationErrors.ip"></p>
+<p class="mt-1 text-sm text-blue-400" x-show="!validationErrors.ip &amp;&amp; hasFieldChanged('ip')">
+                                    Was: <span x-text="originalData.ip"></span>
+</p>
+<p class="mt-1 text-sm text-yellow-400" x-show="ipConflict">
+<svg class="w-4 h-4 inline mr-1" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" fill-rule="evenodd"></path>
+</svg>
+                                    This IP might be in use by another device
+                                </p>
+</div>
+<div>
+<label class="block text-sm font-medium text-gray-300 mb-2" for="mac">
+                                    MAC Address
+                                    <span class="text-gray-500">(Optional)</span>
+</label>
+<div class="flex gap-2">
+<div class="relative flex-1">
+<input :aria-describedby="validationErrors.mac ? 'mac-error' : 'mac-hint'" :aria-invalid="validationErrors.mac ? 'true' : 'false'" :class="{
+                                                   'border-red-500 focus:border-red-500': validationErrors.mac,
+                                                   'border-green-500': isValidMAC &amp;&amp; !validationErrors.mac,
+                                                   'changed-field': hasFieldChanged('mac')
+                                               }" @blur="validateField('mac')" @input="onMacInput" autocomplete="off" class="w-full p-3 pr-10 rounded-lg border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-mono uppercase" id="mac" pattern="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$" placeholder="e.g., AA:BB:CC:DD:EE:FF" type="text" x-model="formData.mac"/>
+<div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+<svg class="w-5 h-5 text-green-500" fill="currentColor" viewbox="0 0 20 20" x-show="isValidMAC &amp;&amp; !validationErrors.mac">
+<path clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<svg class="w-5 h-5 text-red-500" fill="currentColor" viewbox="0 0 20 20" x-show="validationErrors.mac">
+<path clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" fill-rule="evenodd"></path>
+</svg>
+</div>
+</div>
+<button :disabled="!isValidIP || discoveringMac || loading" @click="discoverMac" class="px-4 py-3 rounded-lg border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap focus-visible" type="button">
+<span class="flex items-center" x-show="!discoveringMac">
+<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+                                            Discover
+                                        </span>
+<span class="flex items-center" x-show="discoveringMac">
+<div class="loading-spinner w-4 h-4 mr-2 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                                            Discovering...
+                                        </span>
+</button>
+</div>
+<p class="mt-1 text-sm text-red-400" id="mac-error" role="alert" x-show="validationErrors.mac" x-text="validationErrors.mac"></p>
+<p class="mt-1 text-sm text-blue-400" x-show="!validationErrors.mac &amp;&amp; hasFieldChanged('mac')">
+                                    Was: <span x-text="originalData.mac || 'Not set'"></span>
+</p>
+<p class="mt-2 text-sm text-gray-500" id="mac-hint" x-show="!validationErrors.mac &amp;&amp; !hasFieldChanged('mac')">
+                                    Required for Wake-on-LAN functionality
+                                </p>
+</div>
+<div class="pt-6 border-t border-slate-700">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center space-x-2 text-sm text-yellow-400" x-show="hasChanges()">
+<svg class="w-4 h-4" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" fill-rule="evenodd"></path>
+</svg>
+<span>You have unsaved changes</span>
+</div>
+<div class="text-sm text-gray-400" x-show="!hasChanges()">
+                                        No changes to save
+                                    </div>
+<div class="text-sm text-gray-400">
+<kbd class="px-2 py-1 text-xs bg-slate-800 rounded">Ctrl+S</kbd> to save
+                                    </div>
+</div>
+<div class="flex flex-col sm:flex-row gap-4">
+<button :disabled="loading || isSubmitting || !hasChanges() || !isFormValid()" class="flex-1 flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all focus-visible" type="submit">
+<svg class="w-5 h-5 mr-2 -ml-1" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fill-rule="evenodd"></path>
+</svg>
+<span x-text="loading || isSubmitting ? 'Saving...' : 'Save Changes'"></span>
+</button>
+<button @click="navigateAway('{{ url_for('dashboard.dashboard') }}')" class="flex-1 text-center px-6 py-3 rounded-lg font-semibold bg-slate-700 text-gray-300 hover:bg-slate-600 transition-colors focus-visible" type="button">
+                                        Cancel
+                                    </button>
+</div>
+</div>
+</form>
+</div>
+<div class="mt-8 p-6 rounded-lg bg-red-900/10 border border-red-900/20">
+<h3 class="text-lg font-semibold text-red-400 mb-3">Danger Zone</h3>
+<p class="text-sm text-gray-400 mb-4">
+                            Removing this device will delete it from your dashboard and all associated history. This action cannot be undone.
+                        </p>
+<button :disabled="loading || isDeleting" @click="deleteDevice" class="px-4 py-2 rounded-lg font-semibold border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+<span x-show="!isDeleting">Delete Device</span>
+<span x-show="isDeleting">Deleting...</span>
+</button>
+</div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+        function editDeviceApp() {
+            return {
+                loading: false,
+                loadingMessage: 'Saving changes...',
+                isSubmitting: false,
+                isDeleting: false,
+                checkingStatus: false,
+                discoveringMac: false,
+                wakingDevice: false,
+                showUnsavedModal: false,
+                pendingRedirect: null,
+                toasts: [],
+                mobileMenuOpen: false,
+                deviceStatus: 'unknown',
+                lastSeen: null,
+                ipConflict: false,
+                theme: '{{ settings.theme if settings.theme else "dark" }}',
+                
+                originalData: {
+                    name: '{{ device.name | e }}',
+                    ip: '{{ device.ip | e }}',
+                    mac: '{{ device.mac | e }}'
+                },
+                
+                formData: {
+                    name: '{{ device.name | e }}',
+                    ip: '{{ device.ip | e }}',
+                    mac: '{{ device.mac | e }}'
+                },
+                
+                validationErrors: {},
+                validationRules: {
+                    name: {
+                        required: true,
+                        requiredMessage: 'Device name is required',
+                        min: 1,
+                        max: 100,
+                        maxMessage: 'Device name must be no more than 100 characters'
+                    },
+                    ip: {
+                        required: true,
+                        requiredMessage: 'IP address is required',
+                        pattern: LumenTrace.CONSTANTS.VALIDATION.IP_PATTERN,
+                        patternMessage: 'Please enter a valid IP address'
+                    },
+                    mac: {
+                        required: false,
+                        pattern: LumenTrace.CONSTANTS.VALIDATION.MAC_PATTERN,
+                        patternMessage: 'Please enter a valid MAC address'
+                    }
+                },
+                
+                get isValidIP() {
+                    return LumenTrace.Utils.validateIP(this.formData.ip);
+                },
+                
+                get isValidMAC() {
+                    return this.formData.mac && LumenTrace.Utils.validateMAC(this.formData.mac);
+                },
+                
+                hasChanges() {
+                    return this.hasFieldChanged('name') || 
+                           this.hasFieldChanged('ip') || 
+                           this.hasFieldChanged('mac');
+                },
+                
+                hasFieldChanged(field) {
+                    return this.formData[field] !== this.originalData[field];
+                },
+                
+                safeInit() {
+                    try {
+                        this.init();
+                    } catch (error) {
+                        console.error('Edit device initialization failed:', error);
+                        this.showToast('Initialization failed', 'error');
+                    }
+                },
+                
+                init() {
+                    LumenTrace.ToastManager.setAlpineComponent(this);
+                    
+                    LumenTrace.ThemeManager.init(this.theme);
+                    
+                    this.processFlashMessages();
+                    
+                    this.checkDeviceStatus();
+                    
+                    window.addEventListener('beforeunload', (e) => {
+                        if (this.hasChanges() && !this.isSubmitting) {
+                            e.preventDefault();
+                            e.returnValue = '';
+                        }
+                    });
+                    
+                    this.$nextTick(() => {
+                        const nameInput = document.getElementById('name');
+                        if (nameInput) {
+                            nameInput.focus();
+                            nameInput.select();
+                        }
+                    });
+                },
+                
+                processFlashMessages() {
+                    const flashContainer = document.getElementById('flash-messages');
+                    if (flashContainer) {
+                        const messages = flashContainer.querySelectorAll('div[data-type]');
+                        messages.forEach(msg => {
+                            const type = msg.getAttribute('data-type');
+                            const message = msg.getAttribute('data-message');
+                            this.showToast(message, type === 'error' ? 'error' : 'success');
+                        });
+                    }
+                },
+                
+                toggleMobileSidebar() {
+                    this.mobileMenuOpen = !this.mobileMenuOpen;
+                    const button = document.querySelector('[aria-controls="mobile-sidebar"]');
+                    if (button) {
+                        button.setAttribute('aria-expanded', this.mobileMenuOpen);
+                    }
+                },
+                
+                handleEscape() {
+                    if (this.mobileMenuOpen) {
+                        this.toggleMobileSidebar();
+                    } else if (this.showUnsavedModal) {
+                        this.showUnsavedModal = false;
+                    }
+                },
+                
+                navigateAway(url) {
+                    if (this.hasChanges()) {
+                        this.pendingRedirect = url;
+                        this.showUnsavedModal = true;
+                    } else {
+                        window.location.href = url;
+                    }
+                },
+                
+                saveAndRedirect() {
+                    this.showUnsavedModal = false;
+                    this.submitForm().then(() => {
+                        if (this.pendingRedirect) {
+                            window.location.href = this.pendingRedirect;
+                        }
+                    });
+                },
+                
+                discardAndRedirect() {
+                    if (this.pendingRedirect) {
+                        window.location.href = this.pendingRedirect;
+                    }
+                },
+                
+                async checkDeviceStatus() {
+                    if (this.checkingStatus) return;
+                    
+                    this.checkingStatus = true;
+                    
+                    const result = await LumenTrace.APIUtils.get(`/device_status/${encodeURIComponent(this.formData.ip)}`);
+                    
+                    if (result.success) {
+                        this.deviceStatus = result.data.online ? 'online' : 'offline';
+                        this.lastSeen = result.data.last_seen ? new Date(result.data.last_seen).toLocaleString() : null;
+                    } else {
+                        this.deviceStatus = 'unknown';
+                    }
+                    
+                    this.checkingStatus = false;
+                },
+                
+                async wakeDevice() {
+                    if (!this.formData.mac || this.wakingDevice) return;
+                    
+                    this.wakingDevice = true;
+                    
+                    const result = await LumenTrace.APIUtils.post('/wake_device', {
+                        mac: LumenTrace.Utils.normalizeMac(this.formData.mac)
+                    });
+                    
+                    if (result.success && result.data.success) {
+                        this.showToast('Wake-on-LAN packet sent', 'success');
+                        setTimeout(() => this.checkDeviceStatus(), 5000);
+                    }
+                    
+                    this.wakingDevice = false;
+                },
+                
+                onFieldChange(field) {
+                    this.clearFieldError(field);
+                },
+                
+                onIpChange() {
+                    this.onFieldChange('ip');
+                    this.ipConflict = false;
+                    
+                    if (this.isValidIP && this.formData.ip !== this.originalData.ip) {
+                        this.debouncedCheckIp();
+                    }
+                },
+                
+                debouncedCheckIp: LumenTrace.Utils.debounce(function() {
+                    this.checkDeviceStatus();
+                }, 1000),
+                
+                onMacInput(event) {
+                    let value = event.target.value.toUpperCase();
+
+                    value = value.replace(/[^0-9A-F]/g, '');
+                    
+                    if (value.length > 2) {
+                        const parts = value.match(/.{1,2}/g);
+                        value = parts.join(':');
+                    }
+                    
+                    if (value.length > 17) {
+                        value = value.substring(0, 17);
+                    }
+                    
+                    this.formData.mac = value;
+                    this.clearFieldError('mac');
+                },
+                
+                async discoverMac() {
+                    if (!this.isValidIP || this.discoveringMac) return;
+                    
+                    this.discoveringMac = true;
+                    
+                    const result = await LumenTrace.APIUtils.get(`/discover_mac?ip=${encodeURIComponent(this.formData.ip)}`);
+                    
+                    if (result.success) {
+                        if (result.data.success && result.data.mac) {
+                            this.formData.mac = LumenTrace.Utils.normalizeMac(result.data.mac);
+                            this.showToast('MAC address discovered successfully!', 'success');
+                            this.validateField('mac');
+                        } else {
+                            this.showToast('Could not discover MAC address', 'warning');
+                        }
+                    }
+                    
+                    this.discoveringMac = false;
+                },
+                
+                validateField(field) {
+                    const value = this.formData[field];
+                    const rules = this.validationRules[field];
+                    
+                    if (!rules) return;
+                    
+                    delete this.validationErrors[field];
+                    
+                    if (rules.required && (!value || !value.toString().trim())) {
+                        this.validationErrors[field] = rules.requiredMessage || `${field} is required`;
+                        return;
+                    }
+                    
+                    if (value && rules.pattern && !rules.pattern.test(value)) {
+                        this.validationErrors[field] = rules.patternMessage || `Invalid ${field} format`;
+                        return;
+                    }
+                    
+                    if (value && rules.min !== undefined) {
+                        const length = value.toString().length;
+                        if (length < rules.min) {
+                            this.validationErrors[field] = rules.minMessage || `${field} must be at least ${rules.min} characters`;
+                            return;
+                        }
+                    }
+                    
+                    if (value && rules.max !== undefined) {
+                        const length = value.toString().length;
+                        if (length > rules.max) {
+                            this.validationErrors[field] = rules.maxMessage || `${field} must be no more than ${rules.max} characters`;
+                            return;
+                        }
+                    }
+                },
+                
+                clearFieldError(field) {
+                    delete this.validationErrors[field];
+                },
+                
+                isFormValid() {
+                    return this.formData.name.trim() && 
+                           this.isValidIP && 
+                           !this.validationErrors.name && 
+                           !this.validationErrors.ip && 
+                           !this.validationErrors.mac;
+                },
+                
+                async submitForm() {
+                    if (this.isSubmitting || !this.hasChanges() || !this.isFormValid()) return;
+                    
+                    this.validationErrors = {};
+                    Object.keys(this.validationRules).forEach(field => {
+                        this.validateField(field);
+                    });
+                    
+                    if (Object.keys(this.validationErrors).length > 0) {
+                        this.showToast('Please fix the validation errors', 'error');
+                        return;
+                    }
+                    
+                    this.isSubmitting = true;
+                    this.loading = true;
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('name', this.formData.name.trim());
+                        formData.append('ip', this.formData.ip.trim());
+                        formData.append('mac', LumenTrace.Utils.normalizeMac(this.formData.mac) || '');
+                        
+                        const response = await fetch('{{ url_for("devices.edit_device", index=index) }}', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: formData
+                        });
+                        
+                        if (response.redirected) {
+                            this.originalData = { ...this.formData };
+                            this.showToast('Device updated successfully!', 'success');
+                            
+                            setTimeout(() => {
+                                window.location.href = response.url;
+                            }, 1500);
+                        } else if (!response.ok) {
+                            throw new Error('Failed to update device');
+                        }
+                        
+                    } catch (error) {
+                        console.error('Form submission error:', error);
+                        this.showToast('Failed to update device. Please check if the IP already exists.', 'error');
+                        this.isSubmitting = false;
+                        this.loading = false;
+                    }
+                },
+                
+                async deleteDevice() {
+                    if (this.isDeleting) return;
+                    
+                    if (!confirm('Are you sure you want to delete "{{ device.name | e }}"? This action cannot be undone.')) {
+                        return;
+                    }
+                    
+                    this.isDeleting = true;
+                    this.loading = true;
+                    this.loadingMessage = 'Deleting device...';
+                    
+                    const result = await LumenTrace.APIUtils.post('/remove_device', { 
+                        index: {{ index }},
+                        ip: '{{ device.ip | e }}'
+                    });
+                    
+                    if (result.success && result.data.success) {
+                        this.showToast('Device deleted successfully!', 'success');
+                        setTimeout(() => {
+                            window.location.href = '{{ url_for("dashboard.dashboard") }}';
+                        }, 1500);
+                    } else {
+                        this.showToast('Failed to delete device', 'error');
+                        this.isDeleting = false;
+                        this.loading = false;
+                    }
+                },
+                
+                showToast(message, type = 'info') {
+                    return LumenTrace.ToastManager.show(message, type);
+                },
+                
+                removeToast(id) {
+                    LumenTrace.ToastManager.remove(id);
+                }
+            };
+        }
+    </script>
+{% endblock %}

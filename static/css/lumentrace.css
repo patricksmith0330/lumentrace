@@ -1,0 +1,272 @@
+/* Lumentrace Theme Overrides */
+body.lumentrace-theme {
+  --primary-color: var(--lumen-cyan);
+  --secondary-color: var(--lumen-purple);
+  --accent-color: var(--lumen-pink);
+  
+  background: var(--slate-950);
+  position: relative;
+}
+
+/* Animated Gradient Background */
+body.lumentrace-theme::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 40% 20%, rgba(236, 72, 153, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 60% 70%, rgba(34, 197, 94, 0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+  animation: gradientFloat 30s ease-in-out infinite;
+}
+
+@keyframes gradientFloat {
+  0%, 100% { 
+    transform: scale(1) rotate(0deg) translate(0, 0); 
+    filter: hue-rotate(0deg);
+  }
+  25% { 
+    transform: scale(1.1) rotate(90deg) translate(-5%, 5%); 
+    filter: hue-rotate(20deg);
+  }
+  50% { 
+    transform: scale(1.05) rotate(180deg) translate(5%, -5%); 
+    filter: hue-rotate(-20deg);
+  }
+  75% { 
+    transform: scale(1.1) rotate(270deg) translate(-5%, -5%); 
+    filter: hue-rotate(10deg);
+  }
+}
+
+/* All content above background */
+body.lumentrace-theme > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Enhanced Card Hover Effects */
+body.lumentrace-theme .card {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.lumentrace-theme .card:hover {
+  animation: cardFloat 2s ease-in-out infinite;
+}
+
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(-4px) scale(1.01); }
+  50% { transform: translateY(-8px) scale(1.01); }
+}
+
+/* Glowing Active States */
+body.lumentrace-theme .sidebar-nav-link.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: linear-gradient(180deg, var(--lumen-cyan), var(--lumen-purple));
+  border-radius: 0 3px 3px 0;
+  box-shadow: 0 0 10px var(--lumen-cyan);
+}
+
+/* Enhanced UPS Status Grid */
+body.lumentrace-theme .ups-status-item {
+  background: rgba(20, 20, 25, 0.3);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+body.lumentrace-theme .ups-status-item::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, 
+    var(--lumen-cyan), 
+    var(--lumen-purple), 
+    var(--lumen-pink), 
+    var(--lumen-cyan));
+  border-radius: inherit;
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 0.3s;
+  animation: borderRotate 3s linear infinite;
+}
+
+@keyframes borderRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+body.lumentrace-theme .ups-status-item:hover::before {
+  opacity: 0.3;
+}
+
+/* Metric Values with Gradient */
+body.lumentrace-theme .ups-metric-value {
+  background: linear-gradient(135deg, var(--white) 0%, rgba(255, 255, 255, 0.8) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+body.lumentrace-theme .ups-metric-value.battery-high {
+  background: linear-gradient(135deg, var(--lumen-green) 0%, #4ade80 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+body.lumentrace-theme .ups-metric-value.battery-medium {
+  background: linear-gradient(135deg, var(--yellow-400) 0%, var(--orange-400) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+body.lumentrace-theme .ups-metric-value.battery-low {
+  background: linear-gradient(135deg, var(--red-400) 0%, var(--pink-500) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Device Status Enhanced */
+body.lumentrace-theme .device-status-dot {
+  position: relative;
+}
+
+body.lumentrace-theme .device-status-dot::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  background: inherit;
+  border-radius: 50%;
+  opacity: 0.3;
+  animation: ripple 2s ease-out infinite;
+}
+
+@keyframes ripple {
+  0% { 
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  100% { 
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+/* Table Enhancements */
+body.lumentrace-theme .table {
+  background: rgba(15, 15, 18, 0.6);
+  backdrop-filter: blur(20px);
+}
+
+body.lumentrace-theme .table tbody tr {
+  position: relative;
+  transition: all 0.3s;
+}
+
+body.lumentrace-theme .table tbody tr::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(0, 212, 255, 0.05), 
+    transparent);
+  transition: width 0.3s;
+}
+
+body.lumentrace-theme .table tbody tr:hover::before {
+  width: 100%;
+}
+
+body.lumentrace-theme .table tbody tr:hover {
+  background-color: rgba(0, 212, 255, 0.03);
+  transform: translateX(4px);
+}
+
+/* Alert Boxes with Gradient Borders */
+body.lumentrace-theme .alert {
+  position: relative;
+  backdrop-filter: blur(10px);
+}
+
+body.lumentrace-theme .alert.success {
+  background: linear-gradient(135deg, 
+    rgba(34, 197, 94, 0.1) 0%, 
+    rgba(34, 197, 94, 0.05) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
+}
+
+body.lumentrace-theme .alert.error {
+  background: linear-gradient(135deg, 
+    rgba(239, 68, 68, 0.1) 0%, 
+    rgba(239, 68, 68, 0.05) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
+}
+
+body.lumentrace-theme .alert.info {
+  background: linear-gradient(135deg, 
+    rgba(0, 212, 255, 0.1) 0%, 
+    rgba(168, 85, 247, 0.05) 100%);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  body.lumentrace-theme .mobile-header {
+    background: rgba(5, 5, 5, 0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  
+  body.lumentrace-theme .mobile-header-title {
+    background: linear-gradient(135deg, var(--lumen-cyan) 0%, var(--lumen-purple) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/* Loading States */
+body.lumentrace-theme .animate-spin {
+  border-color: rgba(0, 212, 255, 0.2);
+  border-top-color: var(--lumen-cyan);
+}
+
+/* Custom Scrollbar for Lumentrace */
+body.lumentrace-theme::-webkit-scrollbar-track {
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.5) 0%, 
+    rgba(0, 0, 0, 0.3) 100%);
+}
+
+body.lumentrace-theme::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, 
+    var(--lumen-cyan) 0%, 
+    var(--lumen-purple) 50%, 
+    var(--lumen-pink) 100%);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+}

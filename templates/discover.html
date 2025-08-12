@@ -1,0 +1,371 @@
+{% extends "_base.html" %}
+{% block title %}Discover Devices - LumenTrace{% endblock %}
+{% block head %}
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        input[type="checkbox"] {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            display: inline-block;
+            height: 1.25rem;
+            width: 1.25rem;
+            border-radius: .25rem;
+            border: 1px solid #64748b;
+            background-color: #334155;
+            cursor: pointer;
+            vertical-align: middle;
+            transition: all .15s ease-in-out;
+        }
+        input[type="checkbox"]:checked {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        input[type="checkbox"]:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, .5);
+        }
+        input[type="checkbox"]:hover {
+            border-color: #3b82f6;
+        }
+        input[type="checkbox"]:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .focus-visible:focus {
+            outline: 2px solid #3b82f6;
+            outline-offset: 2px;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<div x-data="discoverApp()" x-init="safeInit()" @keydown.escape="handleEscape">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<header class="mb-8">
+<div class="flex items-center gap-3 mb-2">
+<a aria-label="Back to dashboard" class="text-gray-400 hover:text-white transition-colors focus-visible" href="{{ url_for('dashboard.dashboard') }}">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10 19l-7-7m0 0l7-7m-7 7h18" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</a>
+<h1 class="text-3xl font-bold text-gray-200">Network Discovery</h1>
+</div>
+<p class="text-gray-400">Scan your network to find new devices. Range: {{ settings.ip_scan_range }}</p>
+</header>
+<div class="mb-6 flex flex-col sm:flex-row gap-4">
+<button :disabled="loading || isScanning" @click="scanNetwork" class="flex-1 sm:flex-none flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-slate-700 text-white hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+<svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span x-text="loading || isScanning ? 'Scanning...' : 'Rescan Network'"></span>
+</button>
+<button :disabled="selectedDevices.length === 0 || loading || isAdding" @click="addSelectedDevices" class="flex-1 sm:flex-none flex items-center justify-center px-6 py-3 rounded-lg font-semibold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+<svg class="w-5 h-5 mr-2 -ml-1" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span x-text="isAdding ? 'Adding...' : `Add Selected (${selectedDevices.length})`"></span>
+</button>
+</div>
+<div class="rounded-xl shadow-lg bg-slate-900/50 border border-slate-800 hover:border-slate-700 transition-colors overflow-hidden">
+<div class="p-6 border-b border-slate-700">
+<h2 class="text-xl font-semibold text-gray-200">Discovered Devices</h2>
+<p class="text-sm text-gray-400 mt-1">
+<span x-show="devices.length &gt; 0">Found <span x-text="devices.length"></span> new device(s) on your network</span>
+<span x-show="devices.length === 0">No new devices found. Try rescanning or check your network settings.</span>
+</p>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left" role="table">
+<thead class="border-b border-slate-700 bg-slate-800/50">
+<tr role="row">
+<th class="p-4 w-12" role="columnheader">
+<input :aria-label="devices.length &gt; 0 ? (selectedDevices.length === devices.length ? 'Unselect all devices' : 'Select all devices') : 'No devices to select'" :checked="devices.length &gt; 0 &amp;&amp; selectedDevices.length === devices.length" :disabled="devices.length === 0" @change="toggleSelectAll($event.target.checked)" type="checkbox"/>
+</th>
+<th class="p-4 font-semibold text-sm text-gray-300" role="columnheader">IP Address</th>
+<th class="p-4 font-semibold text-sm text-gray-300" role="columnheader">MAC Address</th>
+<th class="p-4 font-semibold text-sm text-gray-300" role="columnheader">Device Name</th>
+<th class="p-4 font-semibold text-sm text-center text-gray-300" role="columnheader">Actions</th>
+</tr>
+</thead>
+<tbody role="rowgroup">
+<template :key="device.ip" x-for="(device, index) in devices">
+<tr class="border-b border-slate-700 last:border-b-0 hover:bg-slate-800/30 transition-colors" role="row">
+<td class="p-4" role="gridcell">
+<input :aria-label="`Select ${device.name || device.ip}`" :checked="isSelected(device.ip)" :value="device.ip" @change="toggleDevice(device.ip, device.mac)" type="checkbox"/>
+</td>
+<td class="p-4 font-mono text-sm text-gray-300" role="gridcell" x-text="device.ip"></td>
+<td class="p-4 font-mono text-sm text-gray-300" role="gridcell" x-text="device.mac || 'Unknown'"></td>
+<td class="p-4" role="gridcell">
+<input :aria-label="`Device name for ${device.ip}`" :placeholder="`Device-${device.ip.replace(/\./g, '-')}`" class="w-full px-2 py-1 rounded border bg-slate-800 text-gray-300 border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all" type="text" x-model="device.name"/>
+</td>
+<td class="p-4 text-center" role="gridcell">
+<button :aria-label="`Add ${device.name || device.ip}`" :disabled="loading || addingDevices[device.ip]" @click="addIndividualDevice(device)" class="inline-flex items-center px-3 py-1 rounded-md text-sm border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible">
+<span x-show="!addingDevices[device.ip]">Add Device</span>
+<span x-show="addingDevices[device.ip]">Adding...</span>
+</button>
+</td>
+</tr>
+</template>
+<tr role="row" x-show="devices.length === 0">
+<td class="text-center p-12 text-gray-500" colspan="5" role="gridcell">
+<svg aria-hidden="true" class="w-16 h-16 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<p class="text-lg font-medium mb-1">No new devices discovered</p>
+<p class="text-sm">Click "Rescan Network" to search for devices</p>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="mt-8 p-6 rounded-lg bg-slate-900/30 border border-slate-800">
+<h3 class="text-lg font-semibold text-gray-200 mb-3">Discovery Information</h3>
+<ul class="space-y-2 text-sm text-gray-400">
+<li class="flex items-start">
+<svg aria-hidden="true" class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<span>Network discovery uses ARP scanning to find active devices on your network.</span>
+</li>
+<li class="flex items-start">
+<svg aria-hidden="true" class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<span>Only devices that respond to ARP requests and are not already added will appear.</span>
+</li>
+<li class="flex items-start">
+<svg aria-hidden="true" class="w-5 h-5 mr-2 text-blue-400 flex-shrink-0 mt-0.5" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path>
+</svg>
+<span>You can customize device names before adding them for easier identification.</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+        function discoverApp() {
+            let initialDevices = [];
+            try {
+                initialDevices = {{ devices | tojson | safe if devices else '[]' }};
+            } catch (e) {
+                console.error('Failed to parse devices:', e);
+                initialDevices = [];
+            }
+            
+            return {
+                loading: false,
+                isScanning: false,
+                isAdding: false,
+                toasts: [],
+                mobileMenuOpen: false,
+                theme: '{{ settings.theme if settings and settings.theme else "dark" }}',
+                
+                devices: [],
+                selectedDevices: [],
+                addingDevices: {},
+                
+                safeInit() {
+                    try {
+                        this.init();
+                    } catch (error) {
+                        console.error('Discover initialization failed:', error);
+                        this.showToast('Initialization failed', 'error');
+                    }
+                },
+                
+                init() {
+                    LumenTrace.ToastManager.setAlpineComponent(this);
+                    
+                    LumenTrace.ThemeManager.init(this.theme);
+                    
+                    this.devices = initialDevices.map(d => ({
+                        ...d,
+                        name: d.name || ''
+                    }));
+                    
+                    this.devices.forEach(device => {
+                        this.addingDevices[device.ip] = false;
+                    });
+                },
+                
+                toggleMobileSidebar() {
+                    this.mobileMenuOpen = !this.mobileMenuOpen;
+                    const button = document.querySelector('[aria-controls="mobile-sidebar"]');
+                    if (button) {
+                        button.setAttribute('aria-expanded', this.mobileMenuOpen);
+                    }
+                },
+                
+                handleEscape() {
+                    if (this.mobileMenuOpen) {
+                        this.toggleMobileSidebar();
+                    }
+                },
+                
+                isSelected(ip) {
+                    return this.selectedDevices.some(d => d.ip === ip);
+                },
+                
+                toggleDevice(ip, mac) {
+                    const index = this.selectedDevices.findIndex(d => d.ip === ip);
+                    if (index > -1) {
+                        this.selectedDevices.splice(index, 1);
+                    } else {
+                        const device = this.devices.find(d => d.ip === ip);
+                        this.selectedDevices.push({ 
+                            ip, 
+                            mac, 
+                            name: device.name || `Device-${ip.replace(/\./g, '-')}` 
+                        });
+                    }
+                },
+                
+                toggleSelectAll(checked) {
+                    if (checked) {
+                        this.selectedDevices = this.devices.map(d => ({ 
+                            ip: d.ip, 
+                            mac: d.mac, 
+                            name: d.name || `Device-${d.ip.replace(/\./g, '-')}` 
+                        }));
+                    } else {
+                        this.selectedDevices = [];
+                    }
+                },
+                
+                async scanNetwork() {
+                    if (this.isScanning) return;
+                    
+                    this.isScanning = true;
+                    this.loading = true;
+                    this.showToast('Scanning network...', 'info');
+                    
+                    try {
+                        window.location.reload();
+                    } catch (error) {
+                        console.error('Scan failed:', error);
+                        this.showToast('Network scan failed', 'error');
+                        this.isScanning = false;
+                        this.loading = false;
+                    }
+                },
+                
+                async addSelectedDevices() {
+                    if (this.selectedDevices.length === 0 || this.isAdding) return;
+                    
+                    this.isAdding = true;
+                    this.loading = true;
+                    
+                    const devicesToAdd = this.selectedDevices.map(selected => {
+                        const device = this.devices.find(d => d.ip === selected.ip);
+                        return {
+                            ip: selected.ip,
+                            mac: selected.mac,
+                            name: device.name || `Device-${selected.ip.replace(/\./g, '-')}`
+                        };
+                    });
+                    
+                    try {
+                        const response = await fetch('/add_selected_devices', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: JSON.stringify(devicesToAdd)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                            this.showToast(data.message || `Added ${devicesToAdd.length} device(s) successfully`, 'success');
+                            
+                            setTimeout(() => {
+                                window.location.href = '{{ url_for("dashboard.dashboard") }}';
+                            }, 1500);
+                        } else {
+                            throw new Error(data.message || 'Failed to add devices');
+                        }
+                    } catch (error) {
+                        console.error('Error adding devices:', error);
+                        this.showToast(error.message || 'Failed to add devices', 'error');
+                        this.isAdding = false;
+                        this.loading = false;
+                    }
+                },
+                
+                async addIndividualDevice(device) {
+                    if (this.addingDevices[device.ip]) return;
+                    
+                    this.addingDevices[device.ip] = true;
+                    
+                    const deviceToAdd = {
+                        ip: device.ip,
+                        mac: device.mac,
+                        name: device.name || `Device-${device.ip.replace(/\./g, '-')}`
+                    };
+                    
+                    try {
+                        const response = await fetch('/add_selected_devices', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': LumenTrace.Utils.getCSRFToken()
+                            },
+                            body: JSON.stringify([deviceToAdd])
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok && data.success) {
+                            this.showToast(`Added ${deviceToAdd.name} successfully`, 'success');
+                            
+                            const index = this.devices.findIndex(d => d.ip === device.ip);
+                            if (index > -1) {
+                                this.devices.splice(index, 1);
+                            }
+                            
+                            const selectedIndex = this.selectedDevices.findIndex(d => d.ip === device.ip);
+                            if (selectedIndex > -1) {
+                                this.selectedDevices.splice(selectedIndex, 1);
+                            }
+                            
+                            delete this.addingDevices[device.ip];
+                        } else {
+                            throw new Error(data.message || 'Failed to add device');
+                        }
+                    } catch (error) {
+                        console.error('Error adding device:', error);
+                        this.showToast(error.message || 'Failed to add device', 'error');
+                        this.addingDevices[device.ip] = false;
+                    }
+                },
+                
+                showToast(message, type = 'info') {
+                    return LumenTrace.ToastManager.show(message, type);
+                },
+                
+                removeToast(id) {
+                    LumenTrace.ToastManager.remove(id);
+                }
+            };
+        }
+    </script>
+{% endblock %}
