@@ -1,10 +1,10 @@
-flask==3.1.1
+flask==3.1.2
 scapy==2.6.1
 ping3==5.1.5
-filelock==3.19.1
+filelock==3.20.0
 python-dotenv==1.1.1
-Flask-Limiter==3.12
-python-json-logger==3.3.0
+Flask-Limiter==4.0.0
+python-json-logger==4.0.0
 waitress==3.0.2
 flask-wtf==1.2.2
 WTForms==3.2.1
