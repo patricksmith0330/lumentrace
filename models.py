@@ -21,7 +21,9 @@ class StateManager:
                 try:
                     with open(DATA_FILE, 'r') as f:
                         loaded_state = json.load(f)
+                        # Ensure all default keys exist, then merge loaded data
                         self.state = {**DEFAULT_STATE, **loaded_state}
+                        # Ensure all default settings exist, then merge loaded settings
                         self.state['settings'] = {**DEFAULT_SETTINGS, **self.state.get('settings', {})}
                         
                         for ups in self.state['settings']['ups_configs']:
@@ -29,6 +31,7 @@ class StateManager:
                                 ups['id'] = generate_ups_id(ups['name'], ups['ip'])
                         
                         for device in self.state.get('devices', []):
+                            # Set default value for new field if missing
                             device.setdefault('last_seen', None)
                             
                     logger.info(f"Loaded state from {DATA_FILE}")
@@ -60,7 +63,8 @@ class StateManager:
         self.state[key] = value
     
     def add_log(self, message, level='INFO'):
-        current_time = datetime.utcnow().isoformat(timespec='seconds')
+        # FIX: Changed to datetime.now() so it respects the container's timezone (TZ)
+        current_time = datetime.now().isoformat(timespec='seconds')
         log_method = getattr(logger, level.lower(), logger.info)
         log_method(message, extra={'log_type': 'app_event', 'event': message})
         
@@ -75,6 +79,7 @@ class StateManager:
         self.save()
     
     def add_event(self, event_type, description, details=None):
+        # FIX: datetime.now() here is also implicitly fixed by installing tzdata
         event = {
             'timestamp': datetime.now().timestamp(),
             'type': event_type,
