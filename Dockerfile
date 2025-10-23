@@ -5,6 +5,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       nut-client \
       iputils-ping \
+      tzdata \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
