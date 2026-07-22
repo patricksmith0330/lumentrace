@@ -3,6 +3,16 @@
 All notable changes to LumenTrace are documented here. This project uses
 [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-07-22
+
+### Changed
+
+- Replaced the original line mark with a clearer power-circuit logo
+- Improved logo sizing in desktop and mobile navigation
+- Added OCI metadata to published container images
+- Added Docker build caching, SBOM generation, and provenance attestations
+- Documented both automatic and direct multi-platform Docker Hub publishing
+
 ## [2.0.0] - 2026-07-22
 
 ### Added

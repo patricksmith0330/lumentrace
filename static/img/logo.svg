@@ -1,28 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 5 115 40">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="logo-title logo-description">
+  <title id="logo-title">LumenTrace</title>
+  <desc id="logo-description">A power symbol formed from a glowing network circuit.</desc>
   <defs>
-    <linearGradient id="traceGradient" x1="0%" y1="50%" x2="100%" y2="50%">
-      <stop offset="0%" style="stop-color:#00A4FF;" />
-      <stop offset="100%" style="stop-color:#A300FF;" />
+    <linearGradient id="panel" x1="8" y1="6" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#20283A"/>
+      <stop offset="1" stop-color="#10151D"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="15" y1="13" x2="52" y2="53" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8FA5FF"/>
+      <stop offset="0.48" stop-color="#6E8CFF"/>
+      <stop offset="1" stop-color="#4FD19B"/>
     </linearGradient>
   </defs>
-  
-  <path 
-    d="M 20 50 L 20 15 C 20 10 25 10 30 10 L 50 10" 
-    stroke="url(#traceGradient)" 
-    stroke-width="4" 
-    fill="none" 
-    stroke-linecap="round" 
-    stroke-linejoin="round"
-  />
 
-  <path 
-    d="M 50 10 L 70 10 L 80 35 L 90 10 L 110 10" 
-    stroke="url(#traceGradient)" 
-    stroke-width="4" 
-    fill="none" 
-    stroke-linecap="round" 
-    stroke-linejoin="round"
-  />
+  <rect x="3" y="3" width="58" height="58" rx="17" fill="url(#panel)" stroke="#303A4A" stroke-width="2"/>
 
-  <circle cx="115" cy="10" r="5" fill="url(#traceGradient)"/>
+  <g fill="none" stroke="url(#signal)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 13v18" stroke="#6E8CFF" stroke-width="11" opacity=".16"/>
+    <path d="M32 13v18" stroke-width="6"/>
+    <path d="M20.2 21.6a18 18 0 1 0 23.6 0" stroke-width="5.5"/>
+    <path d="M16 44.5h7l4-5h10l4 5h7" stroke-width="2.5" opacity=".9"/>
+  </g>
+
+  <g fill="#DCE4FF">
+    <circle cx="16" cy="44.5" r="2.5"/>
+    <circle cx="32" cy="13" r="3"/>
+  </g>
+  <circle cx="48" cy="44.5" r="2.5" fill="#6BE0AB"/>
 </svg>

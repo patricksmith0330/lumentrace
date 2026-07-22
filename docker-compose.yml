@@ -1,6 +1,6 @@
 services:
   lumentrace:
-    image: pwsmith1988/lumentrace:2.0.0
+    image: pwsmith1988/lumentrace:2.0.1
     container_name: lumentrace
     restart: unless-stopped
     env_file: .env

@@ -73,7 +73,7 @@ the local network.
 ```yaml
 services:
   lumentrace:
-    image: pwsmith1988/lumentrace:2.0.0
+    image: pwsmith1988/lumentrace:2.0.1
     container_name: lumentrace
     restart: unless-stopped
     env_file: .env
@@ -214,6 +214,28 @@ Add these repository Actions secrets before pushing a release tag:
 
 - `DOCKERHUB_USERNAME`
 - `DOCKERHUB_TOKEN`
+
+Push a version tag to publish `linux/amd64` and `linux/arm64` images:
+
+```sh
+git tag v2.0.1
+git push origin v2.0.1
+```
+
+The workflow publishes `2.0.1`, `2.0`, and `latest` tags with image metadata,
+an SBOM, and build provenance.
+
+To publish directly from Docker Desktop instead, sign in and run:
+
+```sh
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  --build-arg VERSION=2.0.1 \
+  --tag pwsmith1988/lumentrace:2.0.1 \
+  --tag pwsmith1988/lumentrace:2.0 \
+  --tag pwsmith1988/lumentrace:latest \
+  --push .
+```
 
 ## Credits and license
 
