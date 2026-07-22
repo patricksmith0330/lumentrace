@@ -18,7 +18,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      - run: pytest -q
+      - run: PYTHONPATH=. pytest -q
       - run: python -m compileall -q main.py config.py models.py extensions.py routes services utils
 
   container:
