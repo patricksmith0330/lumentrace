@@ -3,9 +3,6 @@ import logging
 import sys
 from dotenv import load_dotenv
 from flask import Flask
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from flask_wtf.csrf import CSRFProtect
 from waitress import serve
 from pythonjsonlogger import jsonlogger
 
@@ -15,6 +12,7 @@ from config import FLASK_CONFIG, DATA_DIR, POLL_INTERVAL
 from models import state_manager
 from services.monitoring import MonitoringService
 from routes import register_blueprints
+from extensions import csrf, limiter
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -29,38 +27,35 @@ if logger.hasHandlers():
     logger.handlers.clear()
 logger.addHandler(logHandler)
 
-app = Flask(__name__)
-app.config.update(FLASK_CONFIG)
+def create_app(test_config=None, start_monitoring=False):
+    app = Flask(__name__)
+    app.config.update(FLASK_CONFIG)
+    if test_config:
+        app.config.update(test_config)
 
-for handler in list(app.logger.handlers):
-    app.logger.removeHandler(handler)
+    if not app.config.get('TESTING') and not app.config.get('SECRET_KEY'):
+        raise RuntimeError('SECRET_KEY must be set to a long, random value.')
 
-app.logger.addHandler(logHandler)
-app.logger.setLevel(logging.INFO)
+    for handler in list(app.logger.handlers):
+        app.logger.removeHandler(handler)
+    app.logger.addHandler(logHandler)
+    app.logger.setLevel(logging.INFO)
 
-csrf = CSRFProtect(app)
+    csrf.init_app(app)
+    limiter.init_app(app)
+    register_blueprints(app)
 
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    storage_uri="memory://" 
-)
+    os.makedirs(DATA_DIR, exist_ok=True)
+    state_manager.load()
+    app.state_manager = state_manager
+    app.monitoring_service = MonitoringService(state_manager, POLL_INTERVAL)
 
-app.limiter = limiter
+    if start_monitoring:
+        app.monitoring_service.start()
 
-register_blueprints(app)
-
-monitoring_service = MonitoringService(state_manager, POLL_INTERVAL)
-
-app.state_manager = state_manager
+    return app
 
 if __name__ == '__main__':
-    os.makedirs(DATA_DIR, exist_ok=True)
-    
-    with app.app_context():
-        state_manager.load()
-
-    monitoring_service.start()
-    
+    app = create_app(start_monitoring=True)
     logger.info("Starting LumenTrace server on port 5000...")
     serve(app, host='0.0.0.0', port=5000, threads=10)

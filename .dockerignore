@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.env
+.git/
+.pytest_cache/
+.DS_Store
+data/
+tests/
+*.log
+*.pem
+*.key

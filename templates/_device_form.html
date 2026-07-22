@@ -1,0 +1,22 @@
+<form method="post" class="form-card" x-data='deviceForm({{ initial.ip|default("")|tojson }}, {{ initial.mac|default("")|tojson }})'>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="field">
+    <label for="name">Device name</label>
+    <input id="name" name="name" type="text" maxlength="80" required value="{{ initial.name|default('') }}" placeholder="Office workstation">
+    <p class="field__help">A short name that is easy to recognize.</p>
+  </div>
+  <div class="field">
+    <label for="ip">IP address</label>
+    <input id="ip" name="ip" class="mono" type="text" inputmode="decimal" required x-model="ip" value="{{ initial.ip|default('') }}" placeholder="192.168.1.100">
+    <p class="field__help">Use a static address or DHCP reservation.</p>
+  </div>
+  <div class="field">
+    <div class="field__label-row"><label for="mac">MAC address <span>Optional</span></label><button class="text-button" type="button" @click="discoverMac()" :disabled="discovering || !ip" x-text="discovering ? 'Looking…' : 'Find automatically'"></button></div>
+    <input id="mac" name="mac" class="mono" type="text" x-model="mac" value="{{ initial.mac|default('') }}" placeholder="AA:BB:CC:DD:EE:FF">
+    <p class="field__help" x-text="message || 'Required for Wake-on-LAN. We will also try to find it when you save.'"></p>
+  </div>
+  <div class="form-actions">
+    <a class="button button--secondary" href="{{ url_for('dashboard.dashboard') }}">Cancel</a>
+    <button class="button button--primary" type="submit">{{ submit_label }}</button>
+  </div>
+</form>

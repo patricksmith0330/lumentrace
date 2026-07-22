@@ -42,7 +42,11 @@ class MonitoringService:
             time.sleep(self.poll_interval)
     
     def _check_status(self):
-        state = self.state_manager.state
+        with self.state_manager.locked() as state:
+            self._check_status_locked(state)
+            self.state_manager.save()
+
+    def _check_status_locked(self, state):
         settings = state.get('settings', {})
         
         if settings.get('verbose_logging', False):
@@ -65,9 +69,9 @@ class MonitoringService:
                     max_history = settings.get('log_retention', 100)
                     state['battery_history'] = state['battery_history'][-max_history:]
             
-            last_status = state.get('last_status', '')
-            
-            if last_status != 'OB' and overall_status == 'OB':
+            recovery_state = state.get('recovery_state', 'NORMAL')
+
+            if is_on_battery and recovery_state == 'NORMAL':
                 self.state_manager.add_log('Outage detected. Taking snapshot of online devices.', 'WARNING')
                 self.state_manager.add_event('power_outage', 'Power outage detected', {
                     'ups_status': [{'name': u['name'], 'battery': u['battery']} for u in all_ups]
@@ -77,26 +81,35 @@ class MonitoringService:
                     d['mac'] for d in state['devices'] 
                     if d.get('mac') and is_device_online(d['ip'], self.state_manager)
                 ]
-            
-            elif last_status == 'OB' and overall_status == 'OL':
-                self.state_manager.add_log('Power restored. Checking battery before WOL.', 'INFO')
-                self.state_manager.add_event('power_restored', 'Power has been restored', {
-                    'ups_status': [{'name': u['name'], 'battery': u['battery']} for u in all_ups]
-                })
-                
-                if all(u.get('battery', 0) >= threshold for u in all_ups) and state.get('outage_snapshot'):
-                    self.state_manager.add_log(f'UPS units charged past {threshold}%. Sending WOL.', 'INFO')
-                    
-                    for mac in state['outage_snapshot']:
-                        send_wol(mac, self.state_manager)
-                    
-                    state['outage_snapshot'] = []
-            
+                state['recovery_state'] = 'OUTAGE_CAPTURED'
+                recovery_state = 'OUTAGE_CAPTURED'
+
+            snapshot = state.get('outage_snapshot', [])
+            all_online = all(u.get('status') == 'OL' for u in all_ups)
+            batteries_ready = all(u.get('battery', 0) >= threshold for u in all_ups)
+
+            if snapshot and not is_on_battery and recovery_state in {'OUTAGE_CAPTURED', 'WAITING_FOR_RECHARGE'}:
+                if recovery_state != 'WAITING_FOR_RECHARGE':
+                    self.state_manager.add_log('Power restored. Waiting for UPS batteries to recharge.', 'INFO')
+                    self.state_manager.add_event('power_restored', 'Power has been restored', {
+                        'ups_status': [{'name': u['name'], 'battery': u['battery']} for u in all_ups]
+                    })
+                state['recovery_state'] = 'WAITING_FOR_RECHARGE'
+
+            if snapshot and all_online and batteries_ready:
+                state['recovery_state'] = 'WAKING'
+                self.state_manager.add_log(f'UPS units charged past {threshold}%. Sending WOL.', 'INFO')
+                for mac in snapshot:
+                    send_wol(mac, self.state_manager)
+                state['outage_snapshot'] = []
+                state['recovery_state'] = 'NORMAL'
+
+            elif not snapshot and not is_on_battery:
+                state['recovery_state'] = 'NORMAL'
+
             state['last_status'] = overall_status
-        
+
         for dev in state['devices']:
             dev['online'] = is_device_online(dev['ip'], self.state_manager)
-        
+
         update_uptime_stats(self.state_manager)
-        
-        self.state_manager.save()

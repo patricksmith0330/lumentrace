@@ -43,6 +43,8 @@ def get_ups_data(ups_configs, state_manager=None):
             data = {
                 'id': ups_id,
                 'name': ups_name,
+                'ip': host,
+                'port': port,
                 'status': status,
                 'battery': int(float(data_map.get('battery.charge', 0))),
                 'input_voltage': float(data_map.get('input.voltage', 0)),
@@ -62,6 +64,8 @@ def get_ups_data(ups_configs, state_manager=None):
             all_ups_data.append({
                 'id': ups_id,
                 'name': ups_name,
+                'ip': host,
+                'port': port,
                 'status': 'TIMEOUT',
                 'battery': 0,
                 'input_voltage': 0,
@@ -78,6 +82,8 @@ def get_ups_data(ups_configs, state_manager=None):
             all_ups_data.append({
                 'id': ups_id,
                 'name': ups_name,
+                'ip': host,
+                'port': port,
                 'status': 'ERROR',
                 'battery': 0,
                 'input_voltage': 0,

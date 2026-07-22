@@ -1,288 +1,205 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
-from utils.network import is_valid_mac, is_valid_ip, get_mac_from_ip, send_wol, discover_devices, is_device_online
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
+
 from config import RATE_LIMITS
+from extensions import limiter
+from utils.network import (
+    discover_devices,
+    get_mac_from_ip,
+    is_device_online,
+    is_valid_ip,
+    is_valid_mac,
+    send_wol,
+)
+
 
 devices_bp = Blueprint('devices', __name__)
 
-def get_state_manager():
-    return current_app.state_manager
 
-@devices_bp.route('/wake_device', methods=['POST'])
+def _validated_device(form, devices, current_index=None):
+    name = form.get('name', '').strip()
+    ip = form.get('ip', '').strip()
+    mac = form.get('mac', '').strip().upper().replace('-', ':')
+
+    if not name or len(name) > 80:
+        return None, 'Enter a device name between 1 and 80 characters.'
+    if not is_valid_ip(ip):
+        return None, 'Enter a valid IP address.'
+    if mac and not is_valid_mac(mac):
+        return None, 'Enter a valid MAC address such as AA:BB:CC:DD:EE:FF.'
+
+    for index, device in enumerate(devices):
+        if index == current_index:
+            continue
+        if device.get('ip') == ip:
+            return None, f'A device with IP address {ip} already exists.'
+        if mac and device.get('mac') == mac:
+            return None, f'A device with MAC address {mac} already exists.'
+
+    return {'name': name, 'ip': ip, 'mac': mac}, None
+
+
+@devices_bp.post('/wake_device')
+@limiter.limit(RATE_LIMITS['device_action'])
 def wake_device_route():
-    current_app.limiter.limit(RATE_LIMITS['device_action'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    mac = request.get_json().get('mac')
-    if not mac: 
-        return jsonify(success=False, message="MAC is required."), 400
-    if send_wol(mac, state_manager):
-        return jsonify(success=True, message=f"WOL packet sent to {mac}.")
-    return jsonify(success=False, message="WOL failed.")
+    data = request.get_json(silent=True) or {}
+    mac = data.get('mac', '').strip().upper().replace('-', ':')
+    if not is_valid_mac(mac):
+        return jsonify(success=False, message='A valid MAC address is required.'), 400
+    if send_wol(mac, current_app.state_manager):
+        return jsonify(success=True, message='Wake packet sent.')
+    return jsonify(success=False, message='The wake packet could not be sent.'), 500
+
 
 @devices_bp.route('/add_device', methods=['GET', 'POST'])
+@limiter.limit(RATE_LIMITS['api_write'], methods=['POST'])
 def add_device():
-    current_app.limiter.limit(RATE_LIMITS['api_write'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    settings = state_manager.get('settings', {})
-    
+    manager = current_app.state_manager
+    settings = manager.get('settings', {})
+    initial = {
+        'name': request.form.get('name', ''),
+        'ip': request.form.get('ip', request.args.get('ip', '')),
+        'mac': request.form.get('mac', request.args.get('mac', '')),
+    }
+
     if request.method == 'POST':
-        name = request.form['name'].strip()
-        mac = request.form.get('mac', '').strip().upper()
-        ip = request.form['ip'].strip()
-        devices = state_manager.get('devices', [])
-        existing_ips = {dev['ip'] for dev in devices}
-        existing_macs = {dev['mac'] for dev in devices if dev.get('mac')}
+        with manager.locked() as state:
+            device, error = _validated_device(request.form, state.get('devices', []))
+            if error:
+                flash(error, 'error')
+                return render_template('add_device.html', settings=settings, initial=initial)
 
-        if mac and not is_valid_mac(mac):
-            flash('Error: Invalid MAC address format.', 'error')
-            return render_template('add_device.html', settings=settings, prefill_ip=ip, prefill_mac=mac)
-        if not is_valid_ip(ip):
-            flash('Error: Invalid IP address format.', 'error')
-            return render_template('add_device.html', settings=settings, prefill_ip=ip, prefill_mac=mac)
+            if not device['mac']:
+                device['mac'] = get_mac_from_ip(device['ip']) or ''
+                if not device['mac']:
+                    flash('Device added without a MAC address. Wake-on-LAN will be unavailable.', 'warning')
 
-        if ip in existing_ips:
-            flash(f'Error: A device with the IP address {ip} already exists.', 'error')
-            return render_template('add_device.html', settings=settings, prefill_ip=ip, prefill_mac=mac)
-        if mac and mac in existing_macs:
-            flash(f'Error: A device with the MAC address {mac} already exists.', 'error')
-            return render_template('add_device.html', settings=settings, prefill_ip=ip, prefill_mac=mac)
-
-        if not mac:
-            detected_mac = get_mac_from_ip(ip)
-            if detected_mac:
-                mac = detected_mac
-                state_manager.add_log(f"Auto-detected MAC for {ip}: {mac}", 'INFO')
-            else:
-                state_manager.add_log(f"Could not auto-detect MAC for {ip}. Please enter it manually if needed for WOL.", 'WARNING')
-                flash(f'Warning: Could not auto-detect MAC for {ip}. Device will be added without it.', 'warning')
-
-        devices.append({'name': name, 'mac': mac, 'ip': ip, 'online': False, 'last_seen': None})
-        state_manager.save()
-        flash(f'Successfully added device: {name}', 'success')
+            device.update(online=False, last_seen=None)
+            state['devices'].append(device)
+            manager.save()
+        manager.add_log(f"Added device: {device['name']}", 'INFO')
+        flash(f"Added {device['name']}.", 'success')
         return redirect(url_for('dashboard.dashboard'))
 
-    prefill_ip = request.args.get('ip', '')
-    prefill_mac = request.args.get('mac', '')
-    return render_template('add_device.html', settings=settings, prefill_ip=prefill_ip, prefill_mac=prefill_mac)
+    return render_template('add_device.html', settings=settings, initial=initial)
 
-@devices_bp.route('/add_selected_devices', methods=['POST'])
-def add_selected_devices():
-    current_app.limiter.limit(RATE_LIMITS['discovery'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    selected_devices = request.get_json()
-    added_count, skipped_count = 0, 0
-    devices = state_manager.get('devices', [])
-    existing_ips = {dev['ip'] for dev in devices}
-    existing_macs = {dev['mac'] for dev in devices if dev.get('mac')}
-    
-    for dev_info in selected_devices:
-        ip = dev_info.get('ip')
-        mac = dev_info.get('mac', '').strip().upper()
-        if not ip or ip in existing_ips or (mac and mac in existing_macs):
-            skipped_count += 1
-            continue
-
-        if mac and not is_valid_mac(mac):
-            skipped_count += 1
-            continue
-        if not is_valid_ip(ip):
-            skipped_count += 1
-            continue
-
-        name = dev_info.get('name') or f"Device-{ip.replace('.', '-')}"
-        devices.append({'name': name, 'mac': mac, 'ip': ip, 'online': False, 'last_seen': None})
-        added_count += 1
-        
-    state_manager.save()
-    message = f"Added {added_count} device(s). Skipped {skipped_count}."
-    flash(message, 'success' if added_count > 0 else 'warning')
-    return jsonify(success=True, message=message)
-
-@devices_bp.route('/remove_device', methods=['POST'])
-def remove_device():
-    current_app.limiter.limit(RATE_LIMITS['device_action'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    data = request.get_json()
-    index = data.get('index')
-    devices = state_manager.get('devices', [])
-    
-    if index is None or not (0 <= index < len(devices)):
-        return jsonify(success=False, message="Device not found."), 404
-        
-    dev = devices.pop(index)
-    state_manager.save()
-    state_manager.add_log(f'Removed device: {dev["name"]}', 'INFO')
-    return jsonify(success=True, message=f'Device {dev["name"]} removed.')
-
-@devices_bp.route('/discover')
-def discover():
-    current_app.limiter.limit(RATE_LIMITS['discovery'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    settings = state_manager.get('settings', {})
-    ip_range = settings.get('ip_scan_range', '192.168.1.0/24')
-    timeout = settings.get('discovery_timeout', 2)
-    
-    found_devices = discover_devices(ip_range, timeout, state_manager)
-    added_ips = {dev['ip'] for dev in state_manager.get('devices', [])}
-    new_devices = [dev for dev in found_devices if dev['ip'] not in added_ips and dev.get('mac')]
-    
-    return render_template('discover.html', settings=settings, devices=new_devices)
-
-@devices_bp.route('/device/<ip_address>')
-def device_detail(ip_address):
-    state_manager = get_state_manager()
-    settings = state_manager.get('settings', {})
-    devices = state_manager.get('devices', [])
-    
-    device = None
-    device_index = -1
-    for i, dev in enumerate(devices):
-        if dev['ip'] == ip_address:
-            device = dev
-            device_index = i
-            break
-
-    if not device:
-        flash(f'Error: Device with IP {ip_address} not found.', 'error')
-        return redirect(url_for('dashboard.dashboard'))
-
-    current_online_status = is_device_online(device['ip'], state_manager)
-
-    return render_template(
-        'device_detail.html',
-        settings=settings,
-        device=device,
-        current_online=current_online_status,
-        index=device_index
-    )
 
 @devices_bp.route('/edit_device/<int:index>', methods=['GET', 'POST'])
+@limiter.limit(RATE_LIMITS['api_write'], methods=['POST'])
 def edit_device(index):
-    current_app.limiter.limit(RATE_LIMITS['api_write'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    settings = state_manager.get('settings', {})
-    devices = state_manager.get('devices', [])
-    
-    if not (0 <= index < len(devices)):
+    manager = current_app.state_manager
+    settings = manager.get('settings', {})
+    devices = manager.get('devices', [])
+    if not 0 <= index < len(devices):
+        flash('Device not found.', 'error')
         return redirect(url_for('dashboard.dashboard'))
-    
-    device_to_edit = devices[index]
 
     if request.method == 'POST':
-        name = request.form['name'].strip()
-        mac = request.form.get('mac', '').strip().upper()
-        ip = request.form['ip'].strip()
-
-        if mac and not is_valid_mac(mac):
-            flash('Error: Invalid MAC address format.', 'error')
-            return render_template('edit_device.html', settings=settings, device=device_to_edit, index=index)
-        if not is_valid_ip(ip):
-            flash('Error: Invalid IP address format.', 'error')
-            return render_template('edit_device.html', settings=settings, device=device_to_edit, index=index)
-
-        if any(d['ip'] == ip and i != index for i, d in enumerate(devices)):
-            flash(f'Error: IP {ip} already exists.', 'error')
-            return render_template('edit_device.html', settings=settings, device=device_to_edit, index=index)
-        
-        devices[index].update({'name': name, 'mac': mac, 'ip': ip})
-        state_manager.save()
-        flash(f'Updated device: {name}', 'success')
+        with manager.locked() as state:
+            device, error = _validated_device(request.form, state['devices'], current_index=index)
+            if error:
+                flash(error, 'error')
+                initial = dict(state['devices'][index], **request.form.to_dict())
+                return render_template('edit_device.html', settings=settings, initial=initial, index=index)
+            state['devices'][index].update(device)
+            manager.save()
+        manager.add_log(f"Updated device: {device['name']}", 'INFO')
+        flash(f"Updated {device['name']}.", 'success')
         return redirect(url_for('dashboard.dashboard'))
-    
-    return render_template('edit_device.html', settings=settings, device=device_to_edit, index=index)
 
-@devices_bp.route('/device_status/<ip>')
+    return render_template('edit_device.html', settings=settings, initial=devices[index], index=index)
+
+
+@devices_bp.post('/remove_device')
+@limiter.limit(RATE_LIMITS['device_action'])
+def remove_device():
+    data = request.get_json(silent=True) or {}
+    index = data.get('index')
+    manager = current_app.state_manager
+    with manager.locked() as state:
+        devices = state.get('devices', [])
+        if not isinstance(index, int) or not 0 <= index < len(devices):
+            return jsonify(success=False, message='Device not found.'), 404
+        removed = devices.pop(index)
+        state.get('uptime_stats', {}).pop(removed.get('ip'), None)
+        manager.save()
+    manager.add_log(f"Removed device: {removed['name']}", 'INFO')
+    return jsonify(success=True, message=f"Removed {removed['name']}.")
+
+
+@devices_bp.get('/discover')
+def discover():
+    return render_template('discover.html', settings=current_app.state_manager.get('settings', {}))
+
+
+@devices_bp.post('/discover/scan')
+@limiter.limit(RATE_LIMITS['discovery'])
+def scan_network():
+    manager = current_app.state_manager
+    settings = manager.get('settings', {})
+    found = discover_devices(
+        settings.get('ip_scan_range', '192.168.1.0/24'),
+        settings.get('discovery_timeout', 2),
+        manager,
+    )
+    existing_ips = {device['ip'] for device in manager.get('devices', [])}
+    devices = [device for device in found if device.get('ip') not in existing_ips and device.get('mac')]
+    return jsonify(success=True, devices=devices)
+
+
+@devices_bp.post('/add_selected_devices')
+@limiter.limit(RATE_LIMITS['discovery'])
+def add_selected_devices():
+    selected = request.get_json(silent=True)
+    if not isinstance(selected, list):
+        return jsonify(success=False, message='Select at least one device.'), 400
+
+    manager = current_app.state_manager
+    added = 0
+    skipped = 0
+    with manager.locked() as state:
+        devices = state.get('devices', [])
+        for item in selected:
+            candidate = {
+                'name': item.get('name') or f"Device {item.get('ip', '')}",
+                'ip': item.get('ip', ''),
+                'mac': item.get('mac', ''),
+            }
+            device, error = _validated_device(candidate, devices)
+            if error:
+                skipped += 1
+                continue
+            device.update(online=False, last_seen=None)
+            devices.append(device)
+            added += 1
+        manager.save()
+
+    manager.add_log(f'Network discovery added {added} device(s).', 'INFO')
+    return jsonify(success=True, message=f'Added {added} device(s); skipped {skipped}.')
+
+
+@devices_bp.get('/device_status/<ip>')
+@limiter.limit(RATE_LIMITS['api_read'])
 def device_status(ip):
-    current_app.limiter.limit(RATE_LIMITS['api_read'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    devices = state_manager.get('devices', [])
-    
-    try:
-        device = next((d for d in devices if d.get('ip') == ip), None)
-        
-        if not device:
-            return jsonify({'online': False, 'last_seen': None})
-        
-        is_online = is_device_online(ip, state_manager)
-        
-        if is_online:
-            device['online'] = True
-            state_manager.save()
-            last_seen = device.get('last_seen')
-        else:
-            device['online'] = False
-            last_seen = device.get('last_seen', None)
-        
-        return jsonify({
-            'online': is_online,
-            'last_seen': last_seen
-        })
-        
-    except Exception as e:
-        return jsonify({'online': False, 'last_seen': None, 'error': str(e)})
-
-@devices_bp.route('/discover_mac')
-def discover_mac():
-    """Discover MAC address for an IP"""
-    current_app.limiter.limit(RATE_LIMITS['api_read'])(lambda: None)()
-    
-    state_manager = get_state_manager()
-    ip = request.args.get('ip')
-    
-    if not ip:
-        return jsonify({'success': False, 'message': 'IP address required'})
-    
     if not is_valid_ip(ip):
-        return jsonify({'success': False, 'message': 'Invalid IP address'})
-    
-    try:
-        mac = get_mac_from_ip(ip)
-        
-        if mac:
-            state_manager.add_log(f"Discovered MAC for {ip}: {mac}", 'INFO')
-            return jsonify({
-                'success': True,
-                'mac': mac,
-                'message': 'MAC address discovered'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'mac': None,
-                'message': 'Could not discover MAC address'
-            })
-    except Exception as e:
-        current_app.logger.error(f"MAC discovery error for {ip}: {e}")
-        return jsonify({
-            'success': False,
-            'mac': None,
-            'message': f'Error discovering MAC: {str(e)}'
-        })
-    
-@devices_bp.route('/update_device_order', methods=['POST'])
-def update_device_order():
-    """Receives the new order of devices and saves it to the state."""
-    try:
-        new_ordered_ips = request.get_json()
-        if not isinstance(new_ordered_ips, list):
-            return jsonify({"status": "error", "message": "Invalid data format."}), 400
+        return jsonify(online=False, last_seen=None), 400
+    manager = current_app.state_manager
+    device = next((item for item in manager.get('devices', []) if item.get('ip') == ip), None)
+    if not device:
+        return jsonify(online=False, last_seen=None), 404
+    online = is_device_online(ip, manager)
+    with manager.locked():
+        device['online'] = online
+        manager.save()
+    return jsonify(online=online, last_seen=device.get('last_seen'))
 
-        state = current_app.state_manager.get_state()
-        devices_by_ip = {device['ip']: device for device in state['devices']}
-        new_device_list = [devices_by_ip[ip] for ip in new_ordered_ips if ip in devices_by_ip]
 
-        if len(new_device_list) != len(state['devices']):
-            return jsonify({"status": "error", "message": "Device list mismatch."}), 400
-
-        state['devices'] = new_device_list
-        current_app.state_manager.save_state(state)
-        return jsonify({"status": "success", "message": "Device order updated."})
-    except Exception as e:
-        current_app.logger.error(f"Error updating device order: {e}")
-        return jsonify({"status": "error", "message": "Internal server error."}), 500
+@devices_bp.get('/discover_mac')
+@limiter.limit(RATE_LIMITS['api_read'])
+def discover_mac():
+    ip = request.args.get('ip', '')
+    if not is_valid_ip(ip):
+        return jsonify(success=False, message='Enter a valid IP address.'), 400
+    mac = get_mac_from_ip(ip)
+    if not mac:
+        return jsonify(success=False, message='No MAC address was found.'), 404
+    return jsonify(success=True, mac=mac, message='MAC address found.')

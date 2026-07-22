@@ -1,100 +1,74 @@
-# LumenTrace: Automated power recovery for your network.
+# LumenTrace
 
- <img width="1440" height="807" alt="Screenshot 2025-07-31 at 5 34 14 PM (1)" src="https://github.com/user-attachments/assets/a4c0a0c9-6c1d-4efc-a498-9fb25ac1528a" />
+**Automated power recovery for your network.**
 
-# LumenTrace v2.0.0
+LumenTrace monitors Network UPS Tools (NUT) servers, remembers which devices
+were online when an outage began, and uses Wake-on-LAN to bring them back after
+utility power is stable and the UPS batteries have recharged.
 
-LumenTrace v2.0.0 is a major modernization release focused on a simpler interface, safer outage recovery, and more reliable self-hosted operation.
+![LumenTrace system overview](docs/images/lumentrace-dashboard.png)
 
-## Highlights
+## Why LumenTrace?
 
-### Redesigned interface
+A conventional Wake-on-LAN tool can turn on a machine, but it does not know
+whether that machine was running before a power failure or whether the UPS is
+ready to support it again. LumenTrace adds that missing recovery workflow:
 
-- New responsive, appliance-style dashboard
-- Clear, human-readable UPS and device status
-- Simplified navigation for desktop and mobile
-- Unified device add and edit experience
-- On-demand network discovery
-- Streamlined settings with advanced options kept out of the way
-- Removed draggable widgets, decorative effects, and unused frontend components
+1. Monitor every configured UPS and device.
+2. Capture the online devices when an outage begins.
+3. Persist that recovery list even if the LumenTrace host restarts.
+4. Wait until every UPS is back online and above the chosen battery threshold.
+5. Send Wake-on-LAN packets only to the devices that were previously online.
 
-### More reliable power recovery
+## Features
 
-LumenTrace now uses a persistent recovery state machine.
+- Multiple NUT/UPS connections
+- Persistent outage and recovery states
+- Configurable battery threshold before devices are awakened
+- Device availability and last-seen monitoring
+- Manual and automatic Wake-on-LAN
+- On-demand local-network discovery
+- Responsive desktop and mobile interface
+- Atomic state writes with a rolling backup
+- Container health check and reduced Linux capabilities
+- `linux/amd64` and `linux/arm64` container images
 
-When an outage occurs, it records which monitored devices were online. After utility power returns, LumenTrace continues checking every configured UPS until all units are online and have reached the configured battery threshold. It then sends Wake-on-LAN packets to the recorded devices.
+## Quick start
 
-This fixes cases where recovery could previously be missed when:
+Create a directory for LumenTrace and save the included `docker-compose.yml`
+and `.env.example` files there.
 
-- Power returned before batteries reached the wake threshold
-- Multiple UPS units recovered at different times
-- The application or host restarted during recovery
+Create the runtime environment file:
 
-### Safer state storage
-
-- Atomic state-file updates
-- Automatic `state.json.bak` backup
-- Thread-safe access between the web application and background monitor
-- Existing LumenTrace state remains compatible
-- Recovery progress is preserved across restarts
-
-### Security and deployment
-
-- `SECRET_KEY` is now required
-- Improved CSRF protection and request rate limiting
-- Secure cookie configuration for HTTPS deployments
-- Reduced Docker capabilities
-- Read-only container filesystem
-- Container health check
-- Updated Python runtime and dependencies
-- Multi-platform Docker images for AMD64 and ARM64
-
-## Upgrade notes
-
-Before upgrading, back up your existing data directory:
-
-```bash
-cp -a ./data ./data-backup
+```sh
+cp .env.example .env
+openssl rand -hex 48
 ```
 
-Create or update `.env`:
+Paste the generated value into `.env`:
 
 ```dotenv
-SECRET_KEY=replace-with-a-long-random-value
+SECRET_KEY=replace-with-your-generated-value
 TZ=America/New_York
 POLL_INTERVAL=10
 ```
 
-Generate a secret with:
+Start the container:
 
-```bash
-openssl rand -hex 48
-```
-
-If LumenTrace is accessed through HTTPS, also add:
-
-```dotenv
-SESSION_COOKIE_SECURE=true
-```
-
-Pull and start the new image:
-
-```bash
-docker compose pull
+```sh
 docker compose up -d
 ```
 
-Your existing devices, UPS configurations, logs, and recovery data will be loaded automatically.
-
-## Docker images
+Open:
 
 ```text
-pwsmith1988/lumentrace:2.0.0
-pwsmith1988/lumentrace:2.0
-pwsmith1988/lumentrace:latest
+http://YOUR-SERVER-IP:5000
 ```
 
-Example:
+Configure the NUT server under **Settings**, then add devices manually or scan
+the local network.
+
+## Docker Compose
 
 ```yaml
 services:
@@ -118,25 +92,134 @@ services:
       - ./data:/data
 ```
 
-## Important security note
+Host networking is used so ARP discovery and broadcast Wake-on-LAN can reach
+the local network. No `ports:` entry is needed: LumenTrace listens directly on
+host TCP port `5000`.
 
-LumenTrace is intended for trusted local networks and does not include built-in user authentication.
+## Configuration
 
-If it is accessible outside your trusted LAN, place it behind an authenticated HTTPS reverse proxy such as Traefik with Basic Auth, Authelia, Authentik, or another forward-auth provider.
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `SECRET_KEY` | Yes | — | Long random value used to protect browser sessions and CSRF tokens |
+| `TZ` | No | `America/New_York` | Container timezone |
+| `POLL_INTERVAL` | No | `10` | Background monitoring interval in seconds |
+| `DATA_DIR` | No | `/data` | Container state directory |
+| `SESSION_COOKIE_SECURE` | No | `false` | Set to `true` when access is HTTPS-only |
+| `RATELIMIT_STORAGE_URI` | No | `memory://` | Shared rate-limit backend for advanced multi-instance deployments |
 
-## Validation
+Do not commit `.env` or reuse the example placeholder as the real secret.
 
-This release includes automated coverage for:
+## Updating
 
-- Outage detection and device snapshots
-- Waiting for UPS batteries to recharge
-- Multi-UPS recovery
-- Wake-on-LAN recovery completion
-- Atomic state storage and backups
-- Primary application routes
-- Device creation
-- Settings validation and persistence
+Back up the state directory before a major upgrade:
 
-## Thank you
+```sh
+cp -a ./data ./data-backup
+```
 
-LumenTrace was inspired by the original `wolnut` project. Feedback, bug reports, and contributions are welcome.
+Then update:
+
+```sh
+docker compose pull
+docker compose up -d
+docker compose logs --tail 100 lumentrace
+```
+
+Existing LumenTrace state files are compatible with v2.0.0. New fields are
+merged into the stored state when it loads.
+
+## Data and recovery
+
+State is stored in `/data/state.json`. Writes use an atomic replacement, and
+the previous valid state is retained as `/data/state.json.bak`.
+
+The dashboard reports one of four recovery states:
+
+- **Ready** — normal monitoring
+- **Outage captured** — devices that were online have been recorded
+- **Waiting for recharge** — utility power is back, but one or more UPS units
+  are not ready
+- **Waking devices** — recovery packets are being sent
+
+## Traefik and remote access
+
+LumenTrace does not include user accounts. Do not expose port 5000 directly to
+the public internet. Put it behind HTTPS and an authentication middleware such
+as Traefik Basic Auth, Authelia, or Authentik.
+
+Because LumenTrace uses host networking, a bridge-networked Traefik container
+should route to the Docker host rather than to a `lumentrace` container name.
+A Traefik file-provider service can use:
+
+```yaml
+http:
+  services:
+    lumentrace:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:5000
+```
+
+On Linux, add the following to the Traefik service if the host alias is not
+already available:
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+Set this after HTTPS is working:
+
+```dotenv
+SESSION_COOKIE_SECURE=true
+```
+
+See [SECURITY.md](SECURITY.md) for the project security policy.
+
+## Local development
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements-dev.txt
+export DATA_DIR="$PWD/data"
+export SECRET_KEY="development-only-secret"
+python main.py
+```
+
+Open `http://localhost:5000`.
+
+Build locally with the development override:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+## Tests
+
+```sh
+pytest -q
+python -m compileall -q main.py config.py models.py extensions.py routes services utils
+```
+
+The test suite covers application routes, settings persistence, atomic state
+storage, low-battery recovery, and staggered multi-UPS recovery.
+
+## Automated releases
+
+The included GitHub Actions workflows test every pull request and publish
+multi-platform Docker images for tags such as `v2.0.0`.
+
+Add these repository Actions secrets before pushing a release tag:
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+## Credits and license
+
+LumenTrace was inspired by the original
+[wolnut](https://github.com/hardwarehaven/wolnut) project.
+
+The LumenTrace source is released under the [Unlicense](LICENSE). Bundled
+third-party assets retain their original licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [LICENSES](LICENSES/).

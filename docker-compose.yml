@@ -1,18 +1,19 @@
 services:
   lumentrace:
-    image: pwsmith1988/lumentrace:latest
+    image: pwsmith1988/lumentrace:2.0.0
     container_name: lumentrace
     restart: unless-stopped
+    env_file: .env
     environment:
-      - TZ=America/New_York  # Replace with your timezone
+      TZ: ${TZ:-America/New_York}
+      DATA_DIR: /data
+    cap_drop:
+      - ALL
     cap_add:
       - NET_RAW
-      - NET_ADMIN
-      - NET_BROADCAST
     network_mode: host
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       - ./data:/data
-    env_file: .env
-
-volumes:
-  lumentrace-data:

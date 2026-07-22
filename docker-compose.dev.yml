@@ -1,0 +1,4 @@
+services:
+  lumentrace:
+    build: .
+    image: lumentrace:local

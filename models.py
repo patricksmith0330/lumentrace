@@ -2,7 +2,12 @@ import json
 import os
 import logging
 import uuid
-from datetime import datetime
+import copy
+import shutil
+import tempfile
+import threading
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from filelock import FileLock
 from config import DATA_FILE, DATA_LOCK_FILE, DEFAULT_STATE, DEFAULT_SETTINGS
 
@@ -11,50 +16,73 @@ logger = logging.getLogger(__name__)
 class StateManager:
     
     def __init__(self):
-        self.state = DEFAULT_STATE.copy()
+        self.state = copy.deepcopy(DEFAULT_STATE)
         self.lock_timeout = 10
+        self._memory_lock = threading.RLock()
         
     def load(self):
-        lock = FileLock(DATA_LOCK_FILE, timeout=self.lock_timeout)
-        with lock:
+        with self._memory_lock, FileLock(DATA_LOCK_FILE, timeout=self.lock_timeout):
             if os.path.exists(DATA_FILE):
                 try:
                     with open(DATA_FILE, 'r') as f:
                         loaded_state = json.load(f)
-                        # Ensure all default keys exist, then merge loaded data
-                        self.state = {**DEFAULT_STATE, **loaded_state}
-                        # Ensure all default settings exist, then merge loaded settings
-                        self.state['settings'] = {**DEFAULT_SETTINGS, **self.state.get('settings', {})}
+                        self.state = copy.deepcopy(DEFAULT_STATE)
+                        self.state.update(loaded_state)
+                        self.state['settings'] = {
+                            **copy.deepcopy(DEFAULT_SETTINGS),
+                            **self.state.get('settings', {})
+                        }
                         
                         for ups in self.state['settings']['ups_configs']:
                             if 'id' not in ups:
                                 ups['id'] = generate_ups_id(ups['name'], ups['ip'])
                         
                         for device in self.state.get('devices', []):
-                            # Set default value for new field if missing
                             device.setdefault('last_seen', None)
                             
                     logger.info(f"Loaded state from {DATA_FILE}")
                 except (json.JSONDecodeError, Exception) as e:
                     logger.error(f"Error loading state: {e}. Using default state.")
-                    self.state = DEFAULT_STATE.copy()
+                    self.state = copy.deepcopy(DEFAULT_STATE)
                     self._save_unlocked()
             else:
                 logger.info("No state file found, initializing with default state.")
-                self.state = DEFAULT_STATE.copy()
+                self.state = copy.deepcopy(DEFAULT_STATE)
                 self._save_unlocked()
     
     def _save_unlocked(self):
         try:
-            os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-            with open(DATA_FILE, 'w') as f:
-                json.dump(self.state, f, indent=4)
+            data_dir = os.path.dirname(DATA_FILE)
+            os.makedirs(data_dir, exist_ok=True)
+            if os.path.exists(DATA_FILE):
+                shutil.copy2(DATA_FILE, f"{DATA_FILE}.bak")
+
+            fd, temporary_path = tempfile.mkstemp(prefix='state-', suffix='.tmp', dir=data_dir)
+            try:
+                with os.fdopen(fd, 'w') as f:
+                    json.dump(self.state, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+                os.replace(temporary_path, DATA_FILE)
+            finally:
+                if os.path.exists(temporary_path):
+                    os.unlink(temporary_path)
         except Exception as e:
             logger.error(f"Error saving state: {e}")
     
     def save(self):
-        with FileLock(DATA_LOCK_FILE, timeout=self.lock_timeout):
+        with self._memory_lock, FileLock(DATA_LOCK_FILE, timeout=self.lock_timeout):
             self._save_unlocked()
+
+    @contextmanager
+    def locked(self):
+        """Serialize in-memory mutations made by requests and the monitor."""
+        with self._memory_lock:
+            yield self.state
+
+    def snapshot(self):
+        with self._memory_lock:
+            return copy.deepcopy(self.state)
     
     def get(self, key, default=None):
         return self.state.get(key, default)
@@ -63,34 +91,33 @@ class StateManager:
         self.state[key] = value
     
     def add_log(self, message, level='INFO'):
-        # FIX: Changed to datetime.now() so it respects the container's timezone (TZ)
-        current_time = datetime.now().isoformat(timespec='seconds')
+        current_time = datetime.now(timezone.utc).isoformat(timespec='seconds')
         log_method = getattr(logger, level.lower(), logger.info)
         log_method(message, extra={'log_type': 'app_event', 'event': message})
         
-        self.state['logs'].append({
-            'time': current_time,
-            'message': message,
-            'level': level
-        })
-        
-        max_logs = self.state.get('settings', {}).get('log_retention', 100)
-        self.state['logs'] = self.state['logs'][-max_logs:]
-        self.save()
+        with self._memory_lock:
+            self.state['logs'].append({
+                'time': current_time,
+                'message': message,
+                'level': level
+            })
+            max_logs = self.state.get('settings', {}).get('log_retention', 100)
+            self.state['logs'] = self.state['logs'][-max_logs:]
+            self.save()
     
     def add_event(self, event_type, description, details=None):
-        # FIX: datetime.now() here is also implicitly fixed by installing tzdata
+        now = datetime.now(timezone.utc)
         event = {
-            'timestamp': datetime.now().timestamp(),
+            'timestamp': now.timestamp(),
             'type': event_type,
             'description': description,
             'details': details or {},
-            'time_str': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            'time_str': now.isoformat(timespec='seconds')
         }
-        
-        self.state['event_timeline'].append(event)
-        self.state['event_timeline'] = self.state['event_timeline'][-500:]
-        self.save()
+        with self._memory_lock:
+            self.state['event_timeline'].append(event)
+            self.state['event_timeline'] = self.state['event_timeline'][-500:]
+            self.save()
 
 
 def generate_ups_id(name, ip):

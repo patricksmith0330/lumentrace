@@ -1,7 +1,7 @@
 import os
-from pathlib import Path
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'dev_secret_fallback')
+
+SECRET_KEY = os.getenv('SECRET_KEY')
 POLL_INTERVAL = int(os.environ.get('POLL_INTERVAL', 10))
 DATA_DIR = os.environ.get('DATA_DIR', '/data')
 
@@ -16,16 +16,15 @@ DEFAULT_SETTINGS = {
     'ip_scan_range': '192.168.1.0/24',
     'discovery_timeout': 2,
     'ups_configs': [],
-    'density': 'comfortable',
     'wol_battery_threshold': 80,
     'verbose_logging': False,
-    'theme': 'dark'
 }
 
 DEFAULT_STATE = {
     'devices': [],
     'settings': DEFAULT_SETTINGS,
     'last_status': '',
+    'recovery_state': 'NORMAL',
     'outage_snapshot': [],
     'logs': [],
     'battery_history': [],
@@ -35,7 +34,11 @@ DEFAULT_STATE = {
 
 FLASK_CONFIG = {
     'SECRET_KEY': SECRET_KEY,
-    'TEMPLATES_AUTO_RELOAD': True
+    'TEMPLATES_AUTO_RELOAD': os.getenv('FLASK_DEBUG', '').lower() == 'true',
+    'SESSION_COOKIE_HTTPONLY': True,
+    'SESSION_COOKIE_SAMESITE': 'Lax',
+    'SESSION_COOKIE_SECURE': os.getenv('SESSION_COOKIE_SECURE', '').lower() == 'true',
+    'MAX_CONTENT_LENGTH': 1024 * 1024,
 }
 
 RATE_LIMITS = {
