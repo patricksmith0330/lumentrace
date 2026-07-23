@@ -18,7 +18,7 @@ jobs:
         if: ${{ env.DOCKERHUB_USERNAME == '' || env.DOCKERHUB_TOKEN == '' }}
         run: echo "::notice::Add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN repository secrets to publish container images."
       - if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/setup-qemu-action@v3
       - if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
