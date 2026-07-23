@@ -14,7 +14,7 @@
   <script src="{% static 'js/common.js' %}"></script>
   {% block head %}{% endblock %}
 </head>
-<body{% if not user.is_authenticated and page_name == 'login' or not user.is_authenticated and page_name == 'setup' %} class="auth-shell"{% endif %} x-data="shellApp()" @keydown.escape.window="menuOpen = false">
+<body{% if not user.is_authenticated and page_name == 'login' or not user.is_authenticated and page_name == 'setup' %} class="auth-shell"{% endif %} x-data="shellApp()" @keydown.escape.window="menuOpen = false; accountMenuOpen = false">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="topbar__inner">
@@ -33,10 +33,37 @@
             <a class="nav__link{% if page_name == 'settings' %} is-active{% endif %}" href="{% url 'settings' %}">Settings</a>
           </nav>
           {% if user.is_authenticated %}
-            <a class="account-chip nav--desktop" href="{% url 'account' %}" aria-label="Account settings">
-              <span>{{ display_name|first|upper }}</span>
-              <small>{{ display_name }}</small>
-            </a>
+            <div class="user-menu nav--desktop" @click.outside="accountMenuOpen = false">
+              <button
+                class="account-chip"
+                type="button"
+                @click="accountMenuOpen = !accountMenuOpen"
+                :aria-expanded="accountMenuOpen"
+                aria-haspopup="true"
+                aria-controls="account-menu"
+              >
+                <span class="account-chip__avatar">{{ display_name|first|upper }}</span>
+                <small>{{ display_name }}</small>
+                <svg class="account-chip__chevron" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="m4 6 4 4 4-4"></path>
+                </svg>
+              </button>
+              <div
+                id="account-menu"
+                class="user-menu__panel"
+                x-cloak
+                x-show="accountMenuOpen"
+                x-transition
+                role="group"
+                aria-label="Account menu"
+              >
+                <a href="{% url 'account' %}">User settings</a>
+                <form method="post" action="{% url 'logout' %}">
+                  {% csrf_token %}
+                  <button type="submit">Sign out</button>
+                </form>
+              </div>
+            </div>
           {% endif %}
           <button class="icon-button nav-toggle" type="button" @click="menuOpen = !menuOpen" :aria-expanded="menuOpen" aria-controls="mobile-nav" aria-label="Toggle navigation">
             <span></span><span></span><span></span>

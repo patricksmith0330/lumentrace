@@ -64,6 +64,19 @@ class AuthenticationFlowTests(TestCase):
         self.assertEqual(self.client.post('/logout').status_code, 302)
         self.assertEqual(self.client.get('/api/dashboard').status_code, 401)
 
+    def test_account_menu_contains_settings_and_sign_out(self):
+        self.create_admin()
+        self.login()
+
+        dashboard = self.client.get('/')
+        self.assertContains(dashboard, 'aria-label="Account menu"')
+        self.assertContains(dashboard, 'User settings')
+        self.assertContains(dashboard, 'action="/logout"')
+
+        account = self.client.get('/account')
+        self.assertContains(account, 'Change password')
+        self.assertEqual(account.content.count(b'action="/logout"'), 2)
+
     def test_viewer_is_read_only(self):
         self.create_admin()
         create_user(

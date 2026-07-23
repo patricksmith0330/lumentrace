@@ -21,12 +21,10 @@
     </form>
   </section>
 
-  <div class="account-actions">
-    {% if user.is_staff %}<a class="button button--secondary" href="{% url 'users' %}">Users &amp; audit</a>{% endif %}
-    <form method="post" action="{% url 'logout' %}">
-      {% csrf_token %}
-      <button class="button button--quiet" type="submit">Sign out</button>
-    </form>
-  </div>
+  {% if user.is_staff %}
+    <div class="account-actions">
+      <a class="button button--secondary" href="{% url 'users' %}">Users &amp; audit</a>
+    </div>
+  {% endif %}
 </div>
 {% endblock %}

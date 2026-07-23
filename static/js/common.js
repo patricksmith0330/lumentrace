@@ -30,7 +30,10 @@
   };
 
   window.shellApp = function () {
-    return { menuOpen: false };
+    return {
+      menuOpen: false,
+      accountMenuOpen: false,
+    };
   };
 
   window.addEventListener('DOMContentLoaded', () => {
