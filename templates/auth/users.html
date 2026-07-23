@@ -1,0 +1,72 @@
+{% extends "_base.html" %}
+{% block title %}Users & audit · LumenTrace{% endblock %}
+{% block content %}
+<header class="page-heading page-heading--split">
+  <div><p class="eyebrow">Access control</p><h1>Users &amp; audit</h1><p class="page-heading__lede">Manage local access and review security-sensitive activity.</p></div>
+</header>
+
+<div class="security-grid">
+  <div class="settings-content">
+    <section class="panel">
+      <div class="panel__heading"><div><p class="eyebrow">Local accounts</p><h2>Users <span class="count">{{ users|length }}</span></h2></div></div>
+      <div class="user-list">
+        {% for user in users %}
+          <article class="user-row">
+            <div class="user-avatar">{{ user.display_name[:1]|upper }}</div>
+            <div class="user-row__identity">
+              <strong>{{ user.display_name }}</strong>
+              <span>{{ user.username }} · {{ user.role|title }}</span>
+            </div>
+            <span class="status-badge {{ 'is-online' if user.active else 'is-error' }}">{{ 'Active' if user.active else 'Disabled' }}</span>
+            <div class="row-actions">
+              <details class="account-menu">
+                <summary class="button button--quiet">Reset password</summary>
+                <form method="post" action="{{ url_for('auth.reset_user_password', user_id=user.id) }}" class="account-menu__body">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="password" name="password" minlength="12" maxlength="128" placeholder="New password" required>
+                  <input type="password" name="password_confirm" minlength="12" maxlength="128" placeholder="Confirm password" required>
+                  <button class="button button--primary" type="submit">Reset</button>
+                </form>
+              </details>
+              {% if user.id != current_user.id %}
+                <form method="post" action="{{ url_for('auth.toggle_user', user_id=user.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="button button--quiet" type="submit">{{ 'Disable' if user.active else 'Enable' }}</button>
+                </form>
+              {% endif %}
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel__heading"><div><p class="eyebrow">New access</p><h2>Create user</h2></div></div>
+      <form method="post" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="auth-form__grid">
+          <label class="field"><span>Display name</span><input name="display_name" maxlength="80"></label>
+          <label class="field"><span>Username</span><input name="username" minlength="3" maxlength="64" required></label>
+        </div>
+        <label class="field"><span>Role</span><select name="role"><option value="viewer">Viewer — read only</option><option value="admin">Administrator — full control</option></select></label>
+        <div class="auth-form__grid">
+          <label class="field"><span>Password</span><input type="password" name="password" minlength="12" maxlength="128" required></label>
+          <label class="field"><span>Confirm password</span><input type="password" name="password_confirm" minlength="12" maxlength="128" required></label>
+        </div>
+        <div class="form-actions"><button class="button button--primary" type="submit">Create user</button></div>
+      </form>
+    </section>
+  </div>
+
+  <aside class="panel audit-panel">
+    <div class="panel__heading"><div><p class="eyebrow">Security history</p><h2>Recent activity</h2></div></div>
+    <ol class="audit-list">
+      {% for event in audit_events %}
+        <li><strong>{{ event.event_type|replace('.', ' ')|title }}</strong><span>{{ event.actor_username or 'System' }}{% if event.target %} · {{ event.target }}{% endif %}</span><time>{{ event.created_at|replace('T', ' ') }}</time></li>
+      {% else %}
+        <li><span>No security events yet.</span></li>
+      {% endfor %}
+    </ol>
+  </aside>
+</div>
+{% endblock %}

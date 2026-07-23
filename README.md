@@ -68,6 +68,10 @@ http://YOUR-SERVER-IP:5000
 Configure the NUT server under **Settings**, then add devices manually or scan
 the local network.
 
+On the first visit, LumenTrace asks you to create a local administrator account.
+There is no public registration. Existing device and UPS data remains in place
+when authentication is enabled.
+
 ## Docker Compose
 
 ```yaml
@@ -101,6 +105,8 @@ host TCP port `5000`.
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `SECRET_KEY` | Yes | — | Long random value used to protect browser sessions and CSRF tokens |
+| `AUTH_MODE` | No | `local` | Use `local` for built-in authentication or `disabled` for a controlled emergency bypass |
+| `SESSION_LIFETIME_MINUTES` | No | `480` | Signed-in session lifetime in minutes |
 | `TZ` | No | `America/New_York` | Container timezone |
 | `POLL_INTERVAL` | No | `10` | Background monitoring interval in seconds |
 | `DATA_DIR` | No | `/data` | Container state directory |
@@ -125,8 +131,21 @@ docker compose up -d
 docker compose logs --tail 100 lumentrace
 ```
 
-Existing LumenTrace state files are compatible with v2.0.0. New fields are
-merged into the stored state when it loads.
+Existing LumenTrace state files are compatible. Authentication is stored
+separately in `/data/auth.db`, so enabling login does not modify `state.json`.
+
+After upgrading from a version without authentication, open LumenTrace and
+create the initial administrator. To reset a local password from the host:
+
+```sh
+docker compose exec lumentrace flask --app main auth reset-password USERNAME
+```
+
+To inspect local accounts:
+
+```sh
+docker compose exec lumentrace flask --app main auth list-users
+```
 
 ## Data and recovery
 
@@ -143,9 +162,10 @@ The dashboard reports one of four recovery states:
 
 ## Traefik and remote access
 
-LumenTrace does not include user accounts. Do not expose port 5000 directly to
-the public internet. Put it behind HTTPS and an authentication middleware such
-as Traefik Basic Auth, Authelia, or Authentik.
+LumenTrace includes local administrator and viewer accounts, but port 5000
+should still not be exposed directly to the public internet. Put it behind an
+HTTPS reverse proxy, and optionally add another authentication layer such as
+Authelia or Authentik.
 
 Because LumenTrace uses host networking, a bridge-networked Traefik container
 should route to the Docker host rather than to a `lumentrace` container name.

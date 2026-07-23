@@ -33,14 +33,14 @@
             <p class="eyebrow">Power</p>
             <h2>UPS systems</h2>
           </div>
-          <a class="text-link" href="{{ url_for('settings.settings') }}">Configure</a>
+          {% if can_manage %}<a class="text-link" href="{{ url_for('settings.settings') }}">Configure</a>{% endif %}
         </div>
 
         <div class="empty-state" x-show="upsSystems.length === 0">
           <div class="empty-state__icon">↯</div>
           <h3>No UPS configured</h3>
           <p>Add your NUT server connection to begin monitoring power.</p>
-          <a class="button button--primary" href="{{ url_for('settings.settings') }}">Configure UPS</a>
+          {% if can_manage %}<a class="button button--primary" href="{{ url_for('settings.settings') }}">Configure UPS</a>{% endif %}
         </div>
 
         <div class="ups-grid" x-show="upsSystems.length > 0">
@@ -75,10 +75,10 @@
             <p class="eyebrow">Network</p>
             <h2>Devices <span class="count" x-text="devices.length"></span></h2>
           </div>
-          <div class="panel-actions">
+          {% if can_manage %}<div class="panel-actions">
             <a class="button button--secondary" href="{{ url_for('devices.discover') }}">Scan network</a>
             <a class="button button--primary" href="{{ url_for('devices.add_device') }}">Add device</a>
-          </div>
+          </div>{% endif %}
         </div>
 
         <label class="search-field" x-show="devices.length > 4">
@@ -90,7 +90,7 @@
           <div class="empty-state__icon">＋</div>
           <h3>No devices yet</h3>
           <p>Scan the network or add a device manually.</p>
-          <a class="button button--primary" href="{{ url_for('devices.discover') }}">Add your first device</a>
+          {% if can_manage %}<a class="button button--primary" href="{{ url_for('devices.discover') }}">Add your first device</a>{% endif %}
         </div>
 
         <div class="device-list" x-show="devices.length > 0">
@@ -105,10 +105,10 @@
                 <strong x-text="device.online ? 'Online' : 'Offline'"></strong>
                 <span x-show="device.last_seen" x-text="`Last seen ${formatRelative(device.last_seen)}`"></span>
               </div>
-              <div class="row-actions">
+              {% if can_manage %}<div class="row-actions">
                 <button class="button button--quiet" type="button" x-show="!device.online && device.mac" @click="wake(device)" :disabled="waking[device.ip] === true" x-text="waking[device.ip] ? 'Sending…' : 'Wake'"></button>
                 <a class="button button--quiet" :href="`/edit_device/${device.index}`">Edit</a>
-              </div>
+              </div>{% endif %}
             </article>
           </template>
         </div>

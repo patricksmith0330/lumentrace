@@ -1,0 +1,35 @@
+{% extends "_base.html" %}
+{% block title %}Set up administrator · LumenTrace{% endblock %}
+{% block content %}
+<section class="auth-page">
+  <div class="auth-card auth-card--wide">
+    <p class="eyebrow">First-run setup</p>
+    <h1>Create your administrator</h1>
+    <p class="auth-card__intro">This account controls devices, UPS connections, settings, and other users. There is no public registration.</p>
+    <form method="post" class="auth-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="field">
+        <span>Display name <small>Optional</small></span>
+        <input name="display_name" autocomplete="name" maxlength="80" placeholder="Network administrator">
+      </label>
+      <label class="field">
+        <span>Username</span>
+        <input name="username" autocomplete="username" minlength="3" maxlength="64" required>
+        <small>Letters, numbers, periods, dashes, and underscores.</small>
+      </label>
+      <div class="auth-form__grid">
+        <label class="field">
+          <span>Password</span>
+          <input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required>
+        </label>
+        <label class="field">
+          <span>Confirm password</span>
+          <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" maxlength="128" required>
+        </label>
+      </div>
+      <p class="auth-hint">Use at least 12 characters and store the password in a password manager.</p>
+      <button class="button button--primary button--wide" type="submit">Create administrator</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

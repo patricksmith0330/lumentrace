@@ -23,6 +23,8 @@ class AppSmokeTests(unittest.TestCase):
         self.app = main.create_app({
             'TESTING': True,
             'SECRET_KEY': 'test-secret',
+            'AUTH_MODE': 'disabled',
+            'AUTH_DB_PATH': str(data_dir / 'auth.db'),
             'WTF_CSRF_ENABLED': False,
             'RATELIMIT_ENABLED': False,
         })

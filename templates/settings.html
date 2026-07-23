@@ -3,8 +3,9 @@
 {% block content %}
 <div x-data="settingsApp()" x-cloak>
   <script id="settings-data" type="application/json">{{ settings|tojson }}</script>
-  <header class="page-heading"><p class="eyebrow">Configuration</p><h1>Settings</h1><p class="page-heading__lede">Manage UPS connections, recovery behavior, and network discovery.</p></header>
+  <header class="page-heading"><p class="eyebrow">Configuration</p><h1>Settings</h1><p class="page-heading__lede">{{ 'Manage UPS connections, recovery behavior, and network discovery.' if can_manage else 'Review UPS connections and recovery behavior. Your viewer account is read only.' }}</p></header>
 
+  <fieldset class="settings-readonly" {{ 'disabled' if not can_manage else '' }}>
   <div class="settings-layout">
     <nav class="settings-nav" aria-label="Settings sections">
       <a href="#ups">UPS systems</a><a href="#recovery">Recovery</a><a href="#advanced">Advanced</a>
@@ -76,6 +77,7 @@
       </form>
     </div>
   </div>
+  </fieldset>
 </div>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', filename='js/settings.js') }}"></script>{% endblock %}

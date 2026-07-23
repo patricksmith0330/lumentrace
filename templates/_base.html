@@ -13,7 +13,7 @@
   <script src="{{ url_for('static', filename='js/common.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body x-data="shellApp()" @keydown.escape.window="menuOpen = false">
+<body class="{{ 'auth-shell' if request.endpoint and request.endpoint.startswith('auth.') and not current_user.is_authenticated else '' }}" x-data="shellApp()" @keydown.escape.window="menuOpen = false">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="topbar__inner">
@@ -24,20 +24,40 @@
           <small>Automated power recovery for your network</small>
         </span>
       </a>
-      <nav class="nav nav--desktop" aria-label="Primary navigation">
-        <a class="nav__link {{ 'is-active' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}" href="{{ url_for('dashboard.dashboard') }}">Monitor</a>
-        <a class="nav__link {{ 'is-active' if request.endpoint and request.endpoint.startswith('devices.') else '' }}" href="{{ url_for('devices.discover') }}">Devices</a>
-        <a class="nav__link {{ 'is-active' if request.endpoint and request.endpoint.startswith('settings.') else '' }}" href="{{ url_for('settings.settings') }}">Settings</a>
-      </nav>
-      <button class="icon-button nav-toggle" type="button" @click="menuOpen = !menuOpen" :aria-expanded="menuOpen" aria-controls="mobile-nav" aria-label="Toggle navigation">
-        <span></span><span></span><span></span>
-      </button>
+      {% if config.AUTH_MODE == 'disabled' or current_user.is_authenticated %}
+        <div class="topbar__actions">
+          <nav class="nav nav--desktop" aria-label="Primary navigation">
+            <a class="nav__link {{ 'is-active' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}" href="{{ url_for('dashboard.dashboard') }}">Monitor</a>
+            {% if can_manage %}<a class="nav__link {{ 'is-active' if request.endpoint and request.endpoint.startswith('devices.') else '' }}" href="{{ url_for('devices.discover') }}">Devices</a>{% endif %}
+            <a class="nav__link {{ 'is-active' if request.endpoint and request.endpoint.startswith('settings.') else '' }}" href="{{ url_for('settings.settings') }}">Settings</a>
+          </nav>
+          {% if current_user.is_authenticated %}
+            <a class="account-chip nav--desktop" href="{{ url_for('auth.account') }}" aria-label="Account settings">
+              <span>{{ current_user.display_name[:1]|upper }}</span>
+              <small>{{ current_user.display_name }}</small>
+            </a>
+          {% endif %}
+          <button class="icon-button nav-toggle" type="button" @click="menuOpen = !menuOpen" :aria-expanded="menuOpen" aria-controls="mobile-nav" aria-label="Toggle navigation">
+            <span></span><span></span><span></span>
+          </button>
+        </div>
+      {% endif %}
     </div>
-    <nav id="mobile-nav" class="nav nav--mobile" x-cloak x-show="menuOpen" x-transition aria-label="Mobile navigation">
-      <a href="{{ url_for('dashboard.dashboard') }}">Monitor</a>
-      <a href="{{ url_for('devices.discover') }}">Devices</a>
-      <a href="{{ url_for('settings.settings') }}">Settings</a>
-    </nav>
+    {% if config.AUTH_MODE == 'disabled' or current_user.is_authenticated %}
+      <nav id="mobile-nav" class="nav nav--mobile" x-cloak x-show="menuOpen" x-transition aria-label="Mobile navigation">
+        <a href="{{ url_for('dashboard.dashboard') }}">Monitor</a>
+        {% if can_manage %}<a href="{{ url_for('devices.discover') }}">Devices</a>{% endif %}
+        <a href="{{ url_for('settings.settings') }}">Settings</a>
+        {% if current_user.is_authenticated %}
+          <a href="{{ url_for('auth.account') }}">Account</a>
+          {% if current_user.is_admin %}<a href="{{ url_for('auth.users') }}">Users &amp; audit</a>{% endif %}
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="nav__logout" type="submit">Sign out</button>
+          </form>
+        {% endif %}
+      </nav>
+    {% endif %}
   </header>
 
   <div class="flash-stack" aria-live="polite">

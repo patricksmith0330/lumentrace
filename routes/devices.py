@@ -2,6 +2,7 @@ from flask import Blueprint, current_app, flash, jsonify, redirect, render_templ
 
 from config import RATE_LIMITS
 from extensions import limiter
+from routes.auth import admin_required
 from utils.network import (
     discover_devices,
     get_mac_from_ip,
@@ -52,6 +53,7 @@ def wake_device_route():
 
 @devices_bp.route('/add_device', methods=['GET', 'POST'])
 @limiter.limit(RATE_LIMITS['api_write'], methods=['POST'])
+@admin_required
 def add_device():
     manager = current_app.state_manager
     settings = manager.get('settings', {})
@@ -85,6 +87,7 @@ def add_device():
 
 @devices_bp.route('/edit_device/<int:index>', methods=['GET', 'POST'])
 @limiter.limit(RATE_LIMITS['api_write'], methods=['POST'])
+@admin_required
 def edit_device(index):
     manager = current_app.state_manager
     settings = manager.get('settings', {})
@@ -127,6 +130,7 @@ def remove_device():
 
 
 @devices_bp.get('/discover')
+@admin_required
 def discover():
     return render_template('discover.html', settings=current_app.state_manager.get('settings', {}))
 

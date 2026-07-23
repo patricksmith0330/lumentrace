@@ -3,6 +3,23 @@
 All notable changes to LumenTrace are documented here. This project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- First-run local administrator setup
+- Secure login and logout flow with scrypt password hashing
+- Administrator and read-only viewer roles
+- Local user administration and password reset tooling
+- Security audit history for authentication and write operations
+- Hardened session cookies, security headers, and session invalidation
+
+### Changed
+
+- All application pages and APIs now require authentication by default
+- Existing `state.json` data remains separate from the new `auth.db` database
+- Device controls and configuration actions are hidden from viewer accounts
+
 ## [2.0.1] - 2026-07-22
 
 ### Changed
