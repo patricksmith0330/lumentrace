@@ -16,16 +16,21 @@ public disclosure.
 
 ## Deployment scope
 
-LumenTrace provides built-in local administrator and viewer accounts. Passwords
-are stored as scrypt hashes, and authentication data is kept in `/data/auth.db`.
-Do not expose port 5000 directly to the public internet.
+LumenTrace v3 uses Django 5.2 LTS for local administrator and viewer accounts,
+sessions, CSRF protection, password validation, and schema migrations. Passwords
+use Django's scrypt hasher, and authentication data is kept in
+`/data/lumentrace.db`. Do not expose port 5000 directly to the public internet.
 
 For remote access, place LumenTrace behind an HTTPS reverse proxy with an
 an optional additional authentication layer such as Authelia, Authentik, or an
 equivalent forward-auth service. Set `SESSION_COOKIE_SECURE=true` whenever the
-application is accessed exclusively through HTTPS.
+application is accessed exclusively through HTTPS. Configure `ALLOWED_HOSTS`
+with the IP addresses and DNS names used to reach LumenTrace. Only set
+`TRUST_PROXY_HEADERS=true` when the service is reachable exclusively through a
+trusted reverse proxy.
 
 Keep `.env` private. In particular, never commit `SECRET_KEY` to source control.
-Back up both `/data/state.json` and `/data/auth.db`. `AUTH_MODE=disabled` bypasses
-all application authentication and should only be used temporarily on a trusted
-network for emergency recovery.
+Back up both `/data/state.json` and `/data/lumentrace.db`. An earlier v3 beta's
+`/data/auth.db` should be retained until its automatic Django import is verified.
+`AUTH_MODE=disabled` bypasses all application authentication and should only be
+used temporarily on a trusted network for emergency recovery.

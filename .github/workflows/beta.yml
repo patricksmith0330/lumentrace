@@ -11,6 +11,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: github-actions-security-check-key
+      DATA_DIR: /tmp
+      ALLOWED_HOSTS: localhost
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,7 +23,8 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: PYTHONPATH=. pytest -q
-      - run: python -m compileall -q main.py config.py models.py extensions.py routes services utils
+      - run: python -m compileall -q manage.py config.py models.py lumentrace core services utils
+      - run: python manage.py check
 
   publish:
     needs: test
@@ -49,7 +54,7 @@ jobs:
             type=raw,value=v3-beta
           labels: |
             org.opencontainers.image.version=3.0.0-beta.${{ github.run_number }}
-            org.opencontainers.image.description=LumenTrace v3 authentication beta
+            org.opencontainers.image.description=LumenTrace v3 Django security beta
       - uses: docker/build-push-action@v6
         with:
           context: .

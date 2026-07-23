@@ -4,14 +4,14 @@
 <div class="narrow-page">
   <header class="page-heading">
     <p class="eyebrow">Your account</p>
-    <h1>{{ current_user.display_name }}</h1>
-    <p class="page-heading__lede">{{ current_user.username }} · {{ current_user.role|title }}</p>
+    <h1>{{ display_name }}</h1>
+    <p class="page-heading__lede">{{ user.username }} · {{ role_name|title }}</p>
   </header>
 
   <section class="panel">
     <div class="panel__heading"><div><p class="eyebrow">Security</p><h2>Change password</h2></div></div>
     <form method="post" class="auth-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% csrf_token %}
       <label class="field"><span>Current password</span><input type="password" name="current_password" autocomplete="current-password" required></label>
       <div class="auth-form__grid">
         <label class="field"><span>New password</span><input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
@@ -22,9 +22,9 @@
   </section>
 
   <div class="account-actions">
-    {% if current_user.is_admin %}<a class="button button--secondary" href="{{ url_for('auth.users') }}">Users &amp; audit</a>{% endif %}
-    <form method="post" action="{{ url_for('auth.logout') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if user.is_staff %}<a class="button button--secondary" href="{% url 'users' %}">Users &amp; audit</a>{% endif %}
+    <form method="post" action="{% url 'logout' %}">
+      {% csrf_token %}
       <button class="button button--quiet" type="submit">Sign out</button>
     </form>
   </div>

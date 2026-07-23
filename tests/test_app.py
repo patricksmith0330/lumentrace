@@ -1,34 +1,28 @@
 import tempfile
-import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import main
+from django.test import TestCase, override_settings
+
+import core.views
 import models
 from models import StateManager
 
 
-class AppSmokeTests(unittest.TestCase):
+@override_settings(AUTH_MODE='disabled', RATELIMIT_ENABLED=False)
+class AppSmokeTests(TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
         data_dir = Path(self.temporary_directory.name)
+        self.manager = StateManager()
         self.patches = [
-            patch.object(main, 'DATA_DIR', str(data_dir)),
-            patch.object(main, 'state_manager', StateManager()),
+            patch.object(core.views, 'manager', self.manager),
             patch.object(models, 'DATA_FILE', str(data_dir / 'state.json')),
             patch.object(models, 'DATA_LOCK_FILE', str(data_dir / 'state.lock')),
         ]
         for active_patch in self.patches:
             active_patch.start()
-        self.app = main.create_app({
-            'TESTING': True,
-            'SECRET_KEY': 'test-secret',
-            'AUTH_MODE': 'disabled',
-            'AUTH_DB_PATH': str(data_dir / 'auth.db'),
-            'WTF_CSRF_ENABLED': False,
-            'RATELIMIT_ENABLED': False,
-        })
-        self.client = self.app.test_client()
+        self.manager.load()
 
     def tearDown(self):
         for active_patch in reversed(self.patches):
@@ -47,8 +41,7 @@ class AppSmokeTests(unittest.TestCase):
             'mac': 'AA:BB:CC:DD:EE:FF',
         })
         self.assertEqual(response.status_code, 302)
-
-        payload = self.client.get('/api/dashboard').get_json()
+        payload = self.client.get('/api/dashboard').json()
         self.assertEqual(payload['devices'][0]['name'], 'Server')
         self.assertEqual(payload['recovery_state'], 'NORMAL')
 
@@ -61,8 +54,10 @@ class AppSmokeTests(unittest.TestCase):
             'ip_scan_range': '10.0.0.0/24',
         })
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(self.app.state_manager.get('settings')['wol_battery_threshold'], 85)
+        self.assertEqual(self.manager.get('settings')['wol_battery_threshold'], 85)
 
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_security_headers_are_applied(self):
+        response = self.client.get('/')
+        self.assertEqual(response.headers['X-Frame-Options'], 'DENY')
+        self.assertIn("frame-ancestors 'none'", response.headers['Content-Security-Policy'])
+        self.assertEqual(response.headers['X-Content-Type-Options'], 'nosniff')

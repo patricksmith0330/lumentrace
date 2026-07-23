@@ -8,6 +8,9 @@ utility power is stable and the UPS batteries have recharged.
 
 ![LumenTrace system overview](docs/images/lumentrace-dashboard.png)
 
+> This branch contains the Django-based v3 beta. Stable v2 remains available as
+> `pwsmith1988/lumentrace:2.0.1` and `pwsmith1988/lumentrace:latest`.
+
 ## Why LumenTrace?
 
 A conventional Wake-on-LAN tool can turn on a machine, but it does not know
@@ -20,156 +23,148 @@ ready to support it again. LumenTrace adds that missing recovery workflow:
 4. Wait until every UPS is back online and above the chosen battery threshold.
 5. Send Wake-on-LAN packets only to the devices that were previously online.
 
-## Features
+## V3 beta features
 
-- Multiple NUT/UPS connections
-- Persistent outage and recovery states
-- Configurable battery threshold before devices are awakened
-- Device availability and last-seen monitoring
+- Django 5.2 LTS security foundation
+- First-run administrator setup with no public registration
+- Administrator and read-only viewer roles
+- Scrypt password hashing and transparent legacy-hash upgrades
+- CSRF protection, login throttling, trusted-host validation, and audit history
+- Session invalidation after password reset or account disablement
+- Multiple NUT/UPS connections and persistent recovery states
 - Manual and automatic Wake-on-LAN
-- On-demand local-network discovery
-- Responsive desktop and mobile interface
+- Device monitoring, discovery, and last-seen history
 - Atomic state writes with a rolling backup
-- Container health check and reduced Linux capabilities
-- `linux/amd64` and `linux/arm64` container images
+- Non-root, read-only application process with tightly scoped startup capabilities
+- `linux/amd64` and `linux/arm64` images
 
-## Quick start
+## Try the v3 beta
 
-Create a directory for LumenTrace and save the included `docker-compose.yml`
-and `.env.example` files there.
-
-Create the runtime environment file:
+Save `docker-compose.yml`, `docker-compose.v3-beta.yml`, and `.env.example` in
+the same directory. Then create the environment file:
 
 ```sh
 cp .env.example .env
 openssl rand -hex 48
 ```
 
-Paste the generated value into `.env`:
+Paste the generated value and the address you use to open LumenTrace:
 
 ```dotenv
 SECRET_KEY=replace-with-your-generated-value
+ALLOWED_HOSTS=192.168.1.10
 TZ=America/New_York
 POLL_INTERVAL=10
 ```
 
-Start the container:
+Start the beta:
 
 ```sh
-docker compose up -d
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.v3-beta.yml \
+  up -d --pull always
 ```
 
-Open:
+Open `http://YOUR-SERVER-IP:5000`. LumenTrace will ask you to create the first
+administrator.
 
-```text
-http://YOUR-SERVER-IP:5000
-```
-
-Configure the NUT server under **Settings**, then add devices manually or scan
-the local network.
-
-On the first visit, LumenTrace asks you to create a local administrator account.
-There is no public registration. Existing device and UPS data remains in place
-when authentication is enabled.
-
-## Docker Compose
-
-```yaml
-services:
-  lumentrace:
-    image: pwsmith1988/lumentrace:2.0.1
-    container_name: lumentrace
-    restart: unless-stopped
-    env_file: .env
-    environment:
-      TZ: ${TZ:-America/New_York}
-      DATA_DIR: /data
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_RAW
-    network_mode: host
-    read_only: true
-    tmpfs:
-      - /tmp
-    volumes:
-      - ./data:/data
-```
-
-Host networking is used so ARP discovery and broadcast Wake-on-LAN can reach
-the local network. No `ports:` entry is needed: LumenTrace listens directly on
-host TCP port `5000`.
+Host networking lets ARP discovery and broadcast Wake-on-LAN reach the local
+network. No `ports:` entry is required because LumenTrace listens directly on
+host TCP port `5000`. The container briefly uses `CHOWN`, `SETUID`, and
+`SETGID` during startup to secure the bind-mounted data directory, then runs
+the application as UID/GID `10001`. `NET_RAW` supports discovery and ping.
 
 ## Configuration
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `SECRET_KEY` | Yes | — | Long random value used to protect browser sessions and CSRF tokens |
-| `AUTH_MODE` | No | `local` | Use `local` for built-in authentication or `disabled` for a controlled emergency bypass |
-| `SESSION_LIFETIME_MINUTES` | No | `480` | Signed-in session lifetime in minutes |
+| `SECRET_KEY` | Yes | — | At least 32 characters; protects sessions and security tokens |
+| `ALLOWED_HOSTS` | Yes for remote access | Localhost only | Comma-separated IP addresses and DNS names accepted by LumenTrace |
+| `AUTH_MODE` | No | `local` | `local` enables authentication; `disabled` is an emergency bypass |
+| `SESSION_LIFETIME_MINUTES` | No | `480` | Signed-in session lifetime |
+| `SESSION_COOKIE_SECURE` | No | `false` | Set to `true` when access is HTTPS-only |
+| `TRUST_PROXY_HEADERS` | No | `false` | Trust forwarded host, protocol, and client details from a private reverse proxy |
+| `CSRF_TRUSTED_ORIGINS` | No | — | Comma-separated HTTPS origins when required by a reverse-proxy deployment |
 | `TZ` | No | `America/New_York` | Container timezone |
 | `POLL_INTERVAL` | No | `10` | Background monitoring interval in seconds |
-| `DATA_DIR` | No | `/data` | Container state directory |
-| `SESSION_COOKIE_SECURE` | No | `false` | Set to `true` when access is HTTPS-only |
-| `RATELIMIT_STORAGE_URI` | No | `memory://` | Shared rate-limit backend for advanced multi-instance deployments |
+| `DATA_DIR` | No | `/data` | Persistent application-data directory |
 
-Do not commit `.env` or reuse the example placeholder as the real secret.
+Do not commit `.env`, use the example secret, or expose `AUTH_MODE=disabled` to
+an untrusted network.
 
-## Updating
+## Upgrading
 
-Back up the state directory before a major upgrade:
+Back up the complete data directory:
 
 ```sh
 cp -a ./data ./data-backup
 ```
 
-Then update:
+Then pull and restart:
 
 ```sh
-docker compose pull
-docker compose up -d
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.v3-beta.yml \
+  up -d --pull always
+
 docker compose logs --tail 100 lumentrace
 ```
 
-Existing LumenTrace state files are compatible. Authentication is stored
-separately in `/data/auth.db`, so enabling login does not modify `state.json`.
+Existing `/data/state.json` device, UPS, and recovery data is retained.
 
-After upgrading from a version without authentication, open LumenTrace and
-create the initial administrator. To reset a local password from the host:
+If you already tested the earlier Flask-based v3 beta, startup automatically
+imports its `/data/auth.db` users and audit history into
+`/data/lumentrace.db`. Existing passwords continue working and are upgraded to
+Django’s native scrypt format on the next successful login. The old database is
+left untouched as a rollback artifact.
+
+## Account recovery
+
+List users:
 
 ```sh
-docker compose exec lumentrace flask --app main auth reset-password USERNAME
+docker compose exec lumentrace \
+  python manage.py lumentrace_user list
 ```
 
-To inspect local accounts:
+Create a user:
 
 ```sh
-docker compose exec lumentrace flask --app main auth list-users
+docker compose exec lumentrace \
+  python manage.py lumentrace_user create USERNAME --role viewer
+```
+
+Reset a password:
+
+```sh
+docker compose exec lumentrace \
+  python manage.py lumentrace_user reset-password USERNAME
 ```
 
 ## Data and recovery
 
-State is stored in `/data/state.json`. Writes use an atomic replacement, and
-the previous valid state is retained as `/data/state.json.bak`.
+- `/data/state.json` stores devices, UPS settings, recovery state, and activity.
+- `/data/state.json.bak` is the previous valid state snapshot.
+- `/data/lumentrace.db` stores Django users, sessions, migrations, and audit
+  records.
+- `/data/auth.db` is retained only when imported from an earlier v3 beta.
 
-The dashboard reports one of four recovery states:
+The dashboard reports:
 
 - **Ready** — normal monitoring
-- **Outage captured** — devices that were online have been recorded
-- **Waiting for recharge** — utility power is back, but one or more UPS units
-  are not ready
+- **Outage captured** — previously online devices have been recorded
+- **Waiting for recharge** — utility power is back but a UPS is not ready
 - **Waking devices** — recovery packets are being sent
 
-## Traefik and remote access
+## Traefik and HTTPS
 
-LumenTrace includes local administrator and viewer accounts, but port 5000
-should still not be exposed directly to the public internet. Put it behind an
-HTTPS reverse proxy, and optionally add another authentication layer such as
-Authelia or Authentik.
+Do not expose port `5000` directly to the public internet. Put LumenTrace behind
+Traefik or another HTTPS reverse proxy.
 
 Because LumenTrace uses host networking, a bridge-networked Traefik container
-should route to the Docker host rather than to a `lumentrace` container name.
-A Traefik file-provider service can use:
+should route to the Docker host:
 
 ```yaml
 http:
@@ -180,21 +175,32 @@ http:
           - url: http://host.docker.internal:5000
 ```
 
-On Linux, add the following to the Traefik service if the host alias is not
-already available:
+On Linux, add `host.docker.internal:host-gateway` to the Traefik container if
+the alias is unavailable.
 
-```yaml
-extra_hosts:
-  - "host.docker.internal:host-gateway"
-```
-
-Set this after HTTPS is working:
+For an HTTPS deployment:
 
 ```dotenv
+ALLOWED_HOSTS=lumentrace.example.com
 SESSION_COOKIE_SECURE=true
+TRUST_PROXY_HEADERS=true
+CSRF_TRUSTED_ORIGINS=https://lumentrace.example.com
 ```
 
-See [SECURITY.md](SECURITY.md) for the project security policy.
+Only enable forwarded-header trust when the LumenTrace port is reachable
+exclusively through your trusted proxy.
+
+## Roll back to v2
+
+The beta workflow never changes `latest`. Start the base Compose file without
+the beta override:
+
+```sh
+docker compose -f docker-compose.yml up -d
+```
+
+V2 continues using Flask and ignores the Django database. Keep the full data
+backup so a later v3 upgrade can resume safely.
 
 ## Local development
 
@@ -202,82 +208,41 @@ See [SECURITY.md](SECURITY.md) for the project security policy.
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements-dev.txt
+mkdir -p data
 export DATA_DIR="$PWD/data"
-export SECRET_KEY="development-only-secret"
-python main.py
-```
-
-Open `http://localhost:5000`.
-
-Build locally with the development override:
-
-```sh
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+export SECRET_KEY="development-only-secret-that-is-long-enough"
+export DJANGO_DEBUG=true
+python manage.py migrate
+START_MONITORING=1 python manage.py runserver --noreload 0.0.0.0:5000
 ```
 
 ## Tests
 
 ```sh
 pytest -q
-python -m compileall -q main.py config.py models.py extensions.py routes services utils
+python manage.py check
+python -m compileall -q manage.py config.py models.py lumentrace core services utils
 ```
 
-The test suite covers application routes, settings persistence, atomic state
-storage, low-battery recovery, and staggered multi-UPS recovery.
+The suite covers authentication and authorization, Flask-account migration,
+application routes, settings persistence, atomic state storage, low-battery
+recovery, and staggered multi-UPS recovery.
 
-## Automated releases
+## Beta publishing
 
-The included GitHub Actions workflows test every pull request and publish
-multi-platform Docker images for tags such as `v2.0.0`.
-
-Add these repository Actions secrets before pushing a release tag:
-
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN`
-
-Push a version tag to publish `linux/amd64` and `linux/arm64` images:
-
-```sh
-git tag v2.0.1
-git push origin v2.0.1
-```
-
-The workflow publishes `2.0.1`, `2.0`, and `latest` tags with image metadata,
-an SBOM, and build provenance.
-
-### V3 beta channel
-
-The `beta/v3` branch publishes the latest tested authentication beta as:
+Every successful push to `beta/v3` publishes:
 
 ```text
 pwsmith1988/lumentrace:v3
 pwsmith1988/lumentrace:v3-beta
 ```
 
-The floating `v3` tag changes as beta updates are accepted. Stable `latest` and
-v2 tags are not modified. To try it:
+The workflow tests the Django application before building multi-platform images
+with SBOM and provenance metadata. Stable `latest` and all v2 tags remain
+unchanged.
 
-```sh
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.v3-beta.yml \
-  up -d --pull always
-```
-
-Back up the complete `data` directory first. See
-[BETA_NOTES_v3.md](BETA_NOTES_v3.md) for upgrade, update, and rollback steps.
-
-To publish directly from Docker Desktop instead, sign in and run:
-
-```sh
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  --build-arg VERSION=2.0.1 \
-  --tag pwsmith1988/lumentrace:2.0.1 \
-  --tag pwsmith1988/lumentrace:2.0 \
-  --tag pwsmith1988/lumentrace:latest \
-  --push .
-```
+See [BETA_NOTES_v3.md](BETA_NOTES_v3.md) for beta-specific upgrade and rollback
+instructions and [SECURITY.md](SECURITY.md) for deployment guidance.
 
 ## Credits and license
 

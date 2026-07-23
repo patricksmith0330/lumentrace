@@ -1,14 +1,15 @@
 {% extends "_base.html" %}
+{% load static %}
 {% block title %}Edit {{ initial.name }} · LumenTrace{% endblock %}
 {% block content %}
 <div class="narrow-page">
-  <a class="back-link" href="{{ url_for('dashboard.dashboard') }}">← Monitor</a>
+  <a class="back-link" href="{% url 'dashboard' %}">← Monitor</a>
   <header class="page-heading"><p class="eyebrow">Device settings</p><h1>Edit {{ initial.name }}</h1><p class="page-heading__lede">Update monitoring and Wake-on-LAN details.</p></header>
-  {% set submit_label = 'Save changes' %}{% include '_device_form.html' %}
+  {% include '_device_form.html' %}
   <section class="danger-card" x-data>
     <div><h2>Remove device</h2><p>This stops monitoring the device and removes its uptime history.</p></div>
-    <button class="button button--danger" type="button" @click="removeDevice({{ index }}, {{ initial.name|tojson }})">Remove</button>
+    <button class="button button--danger" type="button" @click="removeDevice({{ index }}, '{{ initial.name|escapejs }}')">Remove</button>
   </section>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/device-form.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'js/device-form.js' %}"></script>{% endblock %}

@@ -6,7 +6,7 @@
     <p class="eyebrow">Read-only access</p>
     <h1>Administrator required</h1>
     <p class="auth-card__intro">Your account can monitor LumenTrace, but it cannot change devices, UPS connections, settings, or users.</p>
-    <a class="button button--primary" href="{{ url_for('dashboard.dashboard') }}">Return to monitor</a>
+    <a class="button button--primary" href="{% url 'dashboard' %}">Return to monitor</a>
   </section>
 </div>
 {% endblock %}

@@ -7,7 +7,7 @@
     <h1>Create your administrator</h1>
     <p class="auth-card__intro">This account controls devices, UPS connections, settings, and other users. There is no public registration.</p>
     <form method="post" class="auth-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% csrf_token %}
       <label class="field">
         <span>Display name <small>Optional</small></span>
         <input name="display_name" autocomplete="name" maxlength="80" placeholder="Network administrator">

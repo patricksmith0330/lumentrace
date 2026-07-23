@@ -7,8 +7,8 @@
     <h1>Welcome back</h1>
     <p class="auth-card__intro">Sign in to monitor and recover your network.</p>
     <form method="post" class="auth-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="next" value="{{ next_url or '' }}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url|default:'' }}">
       <label class="field">
         <span>Username</span>
         <input name="username" autocomplete="username" maxlength="64" required autofocus>

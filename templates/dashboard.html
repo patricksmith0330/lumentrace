@@ -1,7 +1,8 @@
 {% extends "_base.html" %}
+{% load static %}
 {% block title %}Monitor · LumenTrace{% endblock %}
 {% block content %}
-<div x-data="dashboardApp({{ settings.refresh_interval|default(30) }})" x-init="init()" x-cloak>
+<div x-data="dashboardApp({{ settings.refresh_interval|default:30 }})" x-init="init()" x-cloak>
   <header class="page-heading page-heading--split">
     <div>
       <p class="eyebrow">Power recovery monitor</p>
@@ -33,14 +34,14 @@
             <p class="eyebrow">Power</p>
             <h2>UPS systems</h2>
           </div>
-          {% if can_manage %}<a class="text-link" href="{{ url_for('settings.settings') }}">Configure</a>{% endif %}
+          {% if can_manage %}<a class="text-link" href="{% url 'settings' %}">Configure</a>{% endif %}
         </div>
 
         <div class="empty-state" x-show="upsSystems.length === 0">
           <div class="empty-state__icon">↯</div>
           <h3>No UPS configured</h3>
           <p>Add your NUT server connection to begin monitoring power.</p>
-          {% if can_manage %}<a class="button button--primary" href="{{ url_for('settings.settings') }}">Configure UPS</a>{% endif %}
+          {% if can_manage %}<a class="button button--primary" href="{% url 'settings' %}">Configure UPS</a>{% endif %}
         </div>
 
         <div class="ups-grid" x-show="upsSystems.length > 0">
@@ -76,8 +77,8 @@
             <h2>Devices <span class="count" x-text="devices.length"></span></h2>
           </div>
           {% if can_manage %}<div class="panel-actions">
-            <a class="button button--secondary" href="{{ url_for('devices.discover') }}">Scan network</a>
-            <a class="button button--primary" href="{{ url_for('devices.add_device') }}">Add device</a>
+            <a class="button button--secondary" href="{% url 'discover' %}">Scan network</a>
+            <a class="button button--primary" href="{% url 'add_device' %}">Add device</a>
           </div>{% endif %}
         </div>
 
@@ -90,7 +91,7 @@
           <div class="empty-state__icon">＋</div>
           <h3>No devices yet</h3>
           <p>Scan the network or add a device manually.</p>
-          {% if can_manage %}<a class="button button--primary" href="{{ url_for('devices.discover') }}">Add your first device</a>{% endif %}
+          {% if can_manage %}<a class="button button--primary" href="{% url 'discover' %}">Add your first device</a>{% endif %}
         </div>
 
         <div class="device-list" x-show="devices.length > 0">
@@ -146,4 +147,4 @@
   </div>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'js/dashboard.js' %}"></script>{% endblock %}

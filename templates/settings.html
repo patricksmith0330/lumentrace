@@ -1,11 +1,12 @@
 {% extends "_base.html" %}
+{% load static %}
 {% block title %}Settings · LumenTrace{% endblock %}
 {% block content %}
 <div x-data="settingsApp()" x-cloak>
-  <script id="settings-data" type="application/json">{{ settings|tojson }}</script>
-  <header class="page-heading"><p class="eyebrow">Configuration</p><h1>Settings</h1><p class="page-heading__lede">{{ 'Manage UPS connections, recovery behavior, and network discovery.' if can_manage else 'Review UPS connections and recovery behavior. Your viewer account is read only.' }}</p></header>
+  {{ settings|json_script:"settings-data" }}
+  <header class="page-heading"><p class="eyebrow">Configuration</p><h1>Settings</h1><p class="page-heading__lede">{% if can_manage %}Manage UPS connections, recovery behavior, and network discovery.{% else %}Review UPS connections and recovery behavior. Your viewer account is read only.{% endif %}</p></header>
 
-  <fieldset class="settings-readonly" {{ 'disabled' if not can_manage else '' }}>
+  <fieldset class="settings-readonly"{% if not can_manage %} disabled{% endif %}>
   <div class="settings-layout">
     <nav class="settings-nav" aria-label="Settings sections">
       <a href="#ups">UPS systems</a><a href="#recovery">Recovery</a><a href="#advanced">Advanced</a>
@@ -47,7 +48,7 @@
       </section>
 
       <form method="post">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% csrf_token %}
         <section class="panel" id="recovery">
           <div class="panel__heading"><div><p class="eyebrow">Automation</p><h2>Recovery</h2></div></div>
           <p class="section-intro">After power returns, LumenTrace waits for this battery level before waking devices that were online when the outage began.</p>
@@ -69,7 +70,7 @@
               <label class="field"><span>Discovery timeout</span><input name="discovery_timeout" type="number" min="1" max="15" value="{{ settings.discovery_timeout }}"><small>Seconds per network scan</small></label>
               <label class="field"><span>Activity retention</span><input name="log_retention" type="number" min="25" max="1000" value="{{ settings.log_retention }}"><small>Number of entries retained</small></label>
             </div>
-            <label class="toggle-row"><span><strong>Verbose logging</strong><small>Record routine polling activity. Useful for troubleshooting.</small></span><input name="verbose_logging" type="checkbox" {{ 'checked' if settings.verbose_logging else '' }}></label>
+            <label class="toggle-row"><span><strong>Verbose logging</strong><small>Record routine polling activity. Useful for troubleshooting.</small></span><input name="verbose_logging" type="checkbox"{% if settings.verbose_logging %} checked{% endif %}></label>
           </div>
         </details>
 
@@ -80,4 +81,4 @@
   </fieldset>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/settings.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'js/settings.js' %}"></script>{% endblock %}

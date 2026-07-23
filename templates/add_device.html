@@ -1,10 +1,11 @@
 {% extends "_base.html" %}
+{% load static %}
 {% block title %}Add device · LumenTrace{% endblock %}
 {% block content %}
 <div class="narrow-page">
-  <a class="back-link" href="{{ url_for('devices.discover') }}">← Devices</a>
+  <a class="back-link" href="{% url 'discover' %}">← Devices</a>
   <header class="page-heading"><p class="eyebrow">Manual setup</p><h1>Add a device</h1><p class="page-heading__lede">Add a device that LumenTrace should monitor and wake after an outage.</p></header>
-  {% set submit_label = 'Add device' %}{% include '_device_form.html' %}
+  {% include '_device_form.html' %}
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/device-form.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'js/device-form.js' %}"></script>{% endblock %}

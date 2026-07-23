@@ -8,17 +8,23 @@ All notable changes to LumenTrace are documented here. This project uses
 ### Added
 
 - First-run local administrator setup
-- Secure login and logout flow with scrypt password hashing
+- Secure login and logout flow with Django-native scrypt password hashing
 - Administrator and read-only viewer roles
 - Local user administration and password reset tooling
 - Security audit history for authentication and write operations
 - Hardened session cookies, security headers, and session invalidation
+- Automatic account and audit-history import from the earlier Flask v3 beta
+- Trusted-host validation and explicit trusted-proxy configuration
 
 ### Changed
 
+- Replaced the v3 Flask web and authentication layer with Django 5.2 LTS
 - All application pages and APIs now require authentication by default
-- Existing `state.json` data remains separate from the new `auth.db` database
+- Existing `state.json` data remains separate from `/data/lumentrace.db`
 - Device controls and configuration actions are hidden from viewer accounts
+- The production application now runs as a non-root user after a minimal
+  bind-volume permission bootstrap
+- Static assets are served through WhiteNoise and the app remains behind Waitress
 
 ## [2.0.1] - 2026-07-22
 

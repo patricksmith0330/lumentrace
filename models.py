@@ -21,6 +21,7 @@ class StateManager:
         self._memory_lock = threading.RLock()
         
     def load(self):
+        os.makedirs(os.path.dirname(DATA_LOCK_FILE) or '.', exist_ok=True)
         with self._memory_lock, FileLock(DATA_LOCK_FILE, timeout=self.lock_timeout):
             if os.path.exists(DATA_FILE):
                 try:
@@ -71,6 +72,7 @@ class StateManager:
             logger.error(f"Error saving state: {e}")
     
     def save(self):
+        os.makedirs(os.path.dirname(DATA_LOCK_FILE) or '.', exist_ok=True)
         with self._memory_lock, FileLock(DATA_LOCK_FILE, timeout=self.lock_timeout):
             self._save_unlocked()
 

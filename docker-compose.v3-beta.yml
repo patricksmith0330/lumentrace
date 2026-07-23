@@ -2,3 +2,7 @@ services:
   lumentrace:
     image: pwsmith1988/lumentrace:v3
     pull_policy: always
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID

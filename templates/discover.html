@@ -1,10 +1,11 @@
 {% extends "_base.html" %}
+{% load static %}
 {% block title %}Devices · LumenTrace{% endblock %}
 {% block content %}
 <div x-data="discoveryApp()" x-cloak>
   <header class="page-heading page-heading--split">
     <div><p class="eyebrow">Device setup</p><h1>Add devices</h1><p class="page-heading__lede">Find devices on {{ settings.ip_scan_range }} or enter one manually.</p></div>
-    <a class="button button--secondary" href="{{ url_for('devices.add_device') }}">Add manually</a>
+    <a class="button button--secondary" href="{% url 'add_device' %}">Add manually</a>
   </header>
 
   <section class="panel discovery-hero">
@@ -38,4 +39,4 @@
   </section>
 </div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/discovery.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{% static 'js/discovery.js' %}"></script>{% endblock %}
