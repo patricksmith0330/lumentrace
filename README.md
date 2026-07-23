@@ -245,6 +245,28 @@ git push origin v2.0.1
 The workflow publishes `2.0.1`, `2.0`, and `latest` tags with image metadata,
 an SBOM, and build provenance.
 
+### V3 beta channel
+
+The `beta/v3` branch publishes the latest tested authentication beta as:
+
+```text
+pwsmith1988/lumentrace:v3
+pwsmith1988/lumentrace:v3-beta
+```
+
+The floating `v3` tag changes as beta updates are accepted. Stable `latest` and
+v2 tags are not modified. To try it:
+
+```sh
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.v3-beta.yml \
+  up -d --pull always
+```
+
+Back up the complete `data` directory first. See
+[BETA_NOTES_v3.md](BETA_NOTES_v3.md) for upgrade, update, and rollback steps.
+
 To publish directly from Docker Desktop instead, sign in and run:
 
 ```sh
